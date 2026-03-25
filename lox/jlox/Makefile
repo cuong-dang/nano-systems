@@ -1,7 +1,7 @@
 # Build
 BUILD_DIR := build
-SOURCE_DIR := java
-SOURCES := $(wildcard java/com/cuongd/nanosystems/jlox/*.java)
+SOURCE_DIR := src
+SOURCES := $(wildcard $(SOURCE_DIR)/com/cuongd/nanosystems/jlox/*.java)
 CLASSES := $(addprefix $(BUILD_DIR)/, $(SOURCES:.java=.class))
 JAVAC_OPTIONS := -Werror
 # Format
