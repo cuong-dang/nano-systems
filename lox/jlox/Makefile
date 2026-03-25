@@ -1,7 +1,7 @@
 # Build
 BUILD_DIR := build
 SOURCE_DIR := src
-SOURCES := $(wildcard $(SOURCE_DIR)/com/cuongd/nanosystems/jlox/*.java)
+SOURCES := $(wildcard $(SOURCE_DIR)/com/cuongd/nanosystems/lox/*.java)
 CLASSES := $(addprefix $(BUILD_DIR)/, $(SOURCES:.java=.class))
 JAVAC_OPTIONS := -Werror
 # Format
@@ -26,4 +26,4 @@ $(BUILD_DIR)/%.class: %.java
 	@ javac -cp $(SOURCE_DIR) -d $(BUILD_DIR) $(JAVAC_OPTIONS) -implicit:none $<
 	@ echo javac $< $(JAVAC_OPTIONS)
 
-.PHONY: clean default fmt fmt-check
+.PHONY: default clean fmt fmt-check
