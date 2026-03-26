@@ -22,9 +22,12 @@ fmt-check:
 	@ find . -name "*.java" -print0 | \
 	  xargs -0 $(GJF) --dry-run --set-exit-if-changed
 
+run: fmt default
+	@ java -cp $(BUILD_DIR) com.cuongd.nanosystems.lox.Lox
+
 $(BUILD_DIR)/%.class: $(SOURCE_DIR)/%.java
 	@ mkdir -p $(dir $@)
 	@ javac -cp $(SOURCE_DIR) -d $(BUILD_DIR) $(JAVAC_OPTIONS) -implicit:none $<
 	@ echo javac $< $(JAVAC_OPTIONS)
 
-.PHONY: default clean fmt fmt-check
+.PHONY: default clean fmt fmt-check run

@@ -99,6 +99,28 @@ class Scanner {
       case '/':
         if (match('/')) {
           while (peek() != '\n' && !isAtEnd()) advance();
+        } else if (match('*')) {
+          int nesting = 1;
+          while (nesting > 0) {
+            if (isAtEnd()) {
+              Lox.error(nesting, "Unterminated block comment.");
+              return;
+            }
+            if (peek() == '/' && peekNext() == '*') {
+              nesting++;
+              advance();
+              advance();
+              continue;
+            }
+            if (peek() == '*' && peekNext() == '/') {
+              nesting--;
+              advance();
+              advance();
+              continue;
+            }
+            if (peek() == '\n') line++;
+            advance();
+          }
         } else {
           addToken(SLASH);
         }
