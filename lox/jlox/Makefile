@@ -2,7 +2,8 @@
 BUILD_DIR := build
 SOURCE_DIR := src
 SOURCES := $(wildcard $(SOURCE_DIR)/com/cuongd/nanosystems/lox/*.java)
-CLASSES := $(addprefix $(BUILD_DIR)/, $(SOURCES:.java=.class))
+REL_SOURCES := $(SOURCES:$(SOURCE_DIR)/%=%)
+CLASSES := $(addprefix $(BUILD_DIR)/, $(REL_SOURCES:.java=.class))
 JAVAC_OPTIONS := -Werror
 # Format
 GJF := java -jar tools/google-java-format-1.35.0-all-deps.jar
@@ -21,8 +22,8 @@ fmt-check:
 	@ find . -name "*.java" -print0 | \
 	  xargs -0 $(GJF) --dry-run --set-exit-if-changed
 
-$(BUILD_DIR)/%.class: %.java
-	@ mkdir -p $(BUILD_DIR)
+$(BUILD_DIR)/%.class: $(SOURCE_DIR)/%.java
+	@ mkdir -p $(dir $@)
 	@ javac -cp $(SOURCE_DIR) -d $(BUILD_DIR) $(JAVAC_OPTIONS) -implicit:none $<
 	@ echo javac $< $(JAVAC_OPTIONS)
 
