@@ -58,4 +58,12 @@ public class Lox {
     System.err.println("[line " + line + "] Error" + where + ": " + message);
     hadError = true;
   }
+
+  public static boolean inError() {
+    return hadError;
+  }
+
+  public static void clearError() {
+    hadError = false;
+  }
 }

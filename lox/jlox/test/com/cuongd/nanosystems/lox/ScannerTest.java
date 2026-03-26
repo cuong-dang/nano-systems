@@ -15,6 +15,32 @@ public class ScannerTest {
       List<Token> tks = scan("/* c */ var x = 1;");
       assertTokenTypes(tks, VAR, IDENTIFIER, EQUAL, NUMBER, SEMICOLON, EOF);
     }
+
+    @Test
+    void errorsIfNotTerminated() {
+      Lox.clearError();
+      scan("/*");
+      assertEquals(true, Lox.inError());
+    }
+
+    @Test
+    void advancesLines() {
+      List<Token> tks = scan("/*\n*/\nvar x = 1;");
+      assertEquals(3, tks.get(0).line);
+    }
+
+    @Test
+    void isNested() {
+      List<Token> tks = scan("/* /* */ */ var x = 1;");
+      assertTokenTypes(tks, VAR, IDENTIFIER, EQUAL, NUMBER, SEMICOLON, EOF);
+    }
+
+    @Test
+    void errorsIfNotTerminatedNesting() {
+      Lox.clearError();
+      scan("/* /* */");
+      assertEquals(true, Lox.inError());
+    }
   }
 
   private static List<Token> scan(String source) {

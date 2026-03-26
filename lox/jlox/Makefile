@@ -9,9 +9,9 @@ TEST_CLASSES := $(addprefix $(BUILD_DIR)/, $(TESTS:.java=.class))
 JAVAC_OPTIONS := -Werror
 
 # Tools
-TOOLS_DIR := tools
-GJF_JAR := $(TOOLS_DIR)/google-java-format.jar
-JUNIT_JAR := $(TOOLS_DIR)/junit.jar
+TOOL_DIR := tool
+GJF_JAR := $(TOOL_DIR)/google-java-format.jar
+JUNIT_JAR := $(TOOL_DIR)/junit.jar
 GJF := java -jar $(GJF_JAR)
 JUNIT := java -jar $(JUNIT_JAR)
 
@@ -36,11 +36,11 @@ run: default
 	@ java -cp $(BUILD_DIR)/$(SOURCE_DIR) com.cuongd.nanosystems.lox.Lox
 
 $(GJF_JAR):
-	@ mkdir -p $(TOOLS_DIR)
+	@ mkdir -p $(TOOL_DIR)
 	curl -L -o $@ https://github.com/google/google-java-format/releases/download/v1.35.0/google-java-format-1.35.0-all-deps.jar
 
 $(JUNIT_JAR):
-	@ mkdir -p $(TOOLS_DIR)
+	@ mkdir -p $(TOOL_DIR)
 	curl -L -o $@ https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/6.1.0-M1/junit-platform-console-standalone-6.1.0-M1.jar
 
 $(BUILD_DIR)/$(SOURCE_DIR)/%.class: $(SOURCE_DIR)/%.java
