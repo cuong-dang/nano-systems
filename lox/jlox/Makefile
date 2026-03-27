@@ -3,8 +3,8 @@ BUILD_DIR := build
 SOURCE_DIR := src
 TEST_DIR := test
 PKG_PATH := com/cuongd/nanosystems/lox
-SOURCES := $(wildcard $(SOURCE_DIR)/$(PKG_PATH)/*.java)
-TESTS := $(wildcard $(TEST_DIR)/$(PKG_PATH)/*.java)
+SOURCES := $(shell find $(SOURCE_DIR) -name "*.java")
+TESTS := $(shell find $(TEST_DIR) -name "*.java")
 CLASSES := $(addprefix $(BUILD_DIR)/, $(SOURCES:.java=.class))
 TEST_CLASSES := $(addprefix $(BUILD_DIR)/, $(TESTS:.java=.class))
 JAVAC_OPTIONS := -Werror -implicit:none
