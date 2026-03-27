@@ -1,2 +1,5 @@
+**/*.jar
 build
-tool
+# AST classes
+src/com/cuongd/nanosystems/lox/.ast.done
+src/com/cuongd/nanosystems/lox/Expr.java
