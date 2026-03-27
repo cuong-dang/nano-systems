@@ -52,8 +52,10 @@ $(BUILD_DIR)/$(TEST_DIR)/%.class: $(TEST_DIR)/%.java
 # Generate AST classes
 AST_DONE := $(SOURCE_DIR)/$(PKG_PATH)/.ast.done
 generate-ast: $(AST_DONE)
+	@: # Don't show "Nothing to be done" output.
 $(AST_DONE): $(BUILD_DIR)/$(TOOL_DIR)/GenerateAst.class
 	@ java -cp $(BUILD_DIR) tool.GenerateAst "$(SOURCE_DIR)/$(PKG_PATH)"
+	@ make fmt
 	@ touch $@
 $(BUILD_DIR)/tool/GenerateAst.class: $(TOOL_DIR)/GenerateAst.java
 	@ javac -d $(BUILD_DIR) $(JAVAC_OPTIONS) $<
