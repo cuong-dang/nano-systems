@@ -3,6 +3,13 @@ BUILD_DIR := build
 SOURCE_DIR := src
 TEST_DIR := test
 PKG_PATH := com/cuongd/nanosystems/lox
+
+# The following is a hack to make sure we run generate-ast first and
+# then re-run make so that SOURCES include the generated classes.
+AST_DONE := $(SOURCE_DIR)/$(PKG_PATH)/.ast.done
+# Forces make to run generate-ast here before continue.
+-include $(AST_DONE)
+
 SOURCES := $(shell find $(SOURCE_DIR) -name "*.java")
 TESTS := $(shell find $(TEST_DIR) -name "*.java")
 CLASSES := $(addprefix $(BUILD_DIR)/, $(SOURCES:.java=.class))
@@ -32,7 +39,9 @@ fmt-check: $(GJF_JAR)
 	  xargs -0 java -jar $(GJF_JAR) --dry-run --set-exit-if-changed
 
 test: $(JUNIT_JAR) default $(TEST_CLASSES)
-	@ java -jar $(JUNIT_JAR) execute --class-path "$(BUILD_DIR)/$(SOURCE_DIR):$(BUILD_DIR)/$(TEST_DIR)" --scan-class-path
+	@ java -jar $(JUNIT_JAR) execute \
+	    --class-path "$(BUILD_DIR)/$(SOURCE_DIR):$(BUILD_DIR)/$(TEST_DIR)" \
+		--scan-class-path
 
 ARGS ?=
 run: default
@@ -50,13 +59,12 @@ $(BUILD_DIR)/$(TEST_DIR)/%.class: $(TEST_DIR)/%.java
 	@ echo javac $< $(JAVAC_OPTIONS)
 
 # Generate AST classes
-AST_DONE := $(SOURCE_DIR)/$(PKG_PATH)/.ast.done
 generate-ast: $(AST_DONE)
 	@: # Don't show "Nothing to be done" output.
 $(AST_DONE): $(BUILD_DIR)/$(TOOL_DIR)/GenerateAst.class
 	@ java -cp $(BUILD_DIR) tool.GenerateAst "$(SOURCE_DIR)/$(PKG_PATH)"
-	@ make fmt
 	@ touch $@
+	@ $(MAKE) fmt
 $(BUILD_DIR)/tool/GenerateAst.class: $(TOOL_DIR)/GenerateAst.java
 	@ javac -d $(BUILD_DIR) $(JAVAC_OPTIONS) $<
 
