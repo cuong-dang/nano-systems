@@ -53,7 +53,7 @@ class Parser {
     if (matchAny(TRUE)) return new Expr.Literal(true);
     if (matchAny(NIL)) return new Expr.Literal(null);
 
-    if (matchAny(NUMBER, STRING)) return new Expr.Literal(peek().literal);
+    if (matchAny(NUMBER, STRING)) return new Expr.Literal(previous().literal);
 
     if (matchAny(LEFT_PAREN)) {
       Expr expr = expression();
@@ -74,7 +74,6 @@ class Parser {
     }
     return expr;
   }
-  ;
 
   private boolean isAtEnd() {
     return peek().type == EOF;

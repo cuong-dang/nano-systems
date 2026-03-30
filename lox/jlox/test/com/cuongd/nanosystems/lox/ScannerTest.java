@@ -43,6 +43,30 @@ public class ScannerTest {
     }
   }
 
+  @Nested
+  class Expression {
+    @Test
+    void literal() {
+      List<Token> tks = scan("1");
+      assertTokenTypes(tks, NUMBER, EOF);
+      assertTokenLexemes(tks, "1", "");
+    }
+
+    @Test
+    void binaryAdd() {
+      List<Token> tks = scan("1+1");
+      assertTokenTypes(tks, NUMBER, PLUS, NUMBER, EOF);
+      assertTokenLexemes(tks, "1", "+", "1", "");
+    }
+
+    @Test
+    void comparison() {
+      List<Token> tks = scan("1==1");
+      assertTokenTypes(tks, NUMBER, EQUAL_EQUAL, NUMBER, EOF);
+      assertTokenLexemes(tks, "1", "==", "1", "");
+    }
+  }
+
   private static List<Token> scan(String source) {
     return new Scanner(source).scanTokens();
   }
@@ -51,6 +75,13 @@ public class ScannerTest {
     assertEquals(types.length, actual.size());
     for (int i = 0; i < types.length; i++) {
       assertEquals(types[i], actual.get(i).type);
+    }
+  }
+
+  private static void assertTokenLexemes(List<Token> actual, Object... values) {
+    assertEquals(values.length, actual.size());
+    for (int i = 0; i < values.length; i++) {
+      assertEquals(values[i], actual.get(i).lexeme);
     }
   }
 }
