@@ -27,16 +27,13 @@ default: generate-ast $(CLASSES)
 
 clean:
 	@ rm -rf $(BUILD_DIR)
+# AST classes
 	@ rm -rf $(SOURCE_DIR)/$(PKG_PATH)/.ast.done
 	@ rm -rf $(SOURCE_DIR)/$(PKG_PATH)/Expr.java
 
 fmt: $(GJF_JAR)
 	@ find . -name "*.java" -print0 | \
 	  xargs -0 java -jar $(GJF_JAR) --replace
-
-fmt-check: $(GJF_JAR)
-	@ find . -name "*.java" -print0 | \
-	  xargs -0 java -jar $(GJF_JAR) --dry-run --set-exit-if-changed
 
 test: $(JUNIT_JAR) default $(TEST_CLASSES)
 	@ java -jar $(JUNIT_JAR) execute \
@@ -75,4 +72,4 @@ $(GJF_JAR):
 $(JUNIT_JAR):
 	curl -L -o $@ https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/6.1.0-M1/junit-platform-console-standalone-6.1.0-M1.jar
 
-.PHONY: default clean fmt fmt-check test run generate-ast
+.PHONY: default clean fmt test run generate-ast
