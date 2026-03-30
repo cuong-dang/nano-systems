@@ -1,20 +1,14 @@
 package com.cuongd.nanosystems.lox;
 
-import static com.cuongd.nanosystems.lox.TokenType.MINUS;
-import static com.cuongd.nanosystems.lox.TokenType.PLUS;
-import static com.cuongd.nanosystems.lox.TokenType.STAR;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RpnPrinterTest {
   @Test
   public void binaryExpression() {
     assertEquals(
-        "1 2 +",
-        print(
-            new Expr.Binary(
-                new Expr.Literal(1), new Token(PLUS, "+", null, 1), new Expr.Literal(2))));
+        "1 2 +", print(new Expr.Binary(new Expr.Literal(1), TestToken.PLUS, new Expr.Literal(2))));
   }
 
   @Test
@@ -24,10 +18,10 @@ public class RpnPrinterTest {
             new Expr.Binary(
                 new Expr.Grouping(
                     new Expr.Binary(
-                        new Expr.Unary(new Token(MINUS, "-", null, 1), new Expr.Literal(1)),
-                        new Token(PLUS, "+", null, 1),
+                        new Expr.Unary(TestToken.MINUS, new Expr.Literal(1)),
+                        TestToken.PLUS,
                         new Expr.Literal(2))),
-                new Token(STAR, "*", null, 0),
+                TestToken.STAR,
                 new Expr.Literal(3)));
     assertEquals("1 ~ 2 + 3 *", actual);
   }

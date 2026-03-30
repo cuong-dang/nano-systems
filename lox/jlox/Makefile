@@ -52,7 +52,7 @@ $(BUILD_DIR)/$(SOURCE_DIR)/%.class: $(SOURCE_DIR)/%.java
 
 $(BUILD_DIR)/$(TEST_DIR)/%.class: $(TEST_DIR)/%.java
 	@ mkdir -p $(dir $@)
-	@ javac -cp "$(SOURCE_DIR):$(JUNIT_JAR)" -d $(BUILD_DIR)/$(TEST_DIR) $(JAVAC_OPTIONS) $<
+	@ javac -cp "$(SOURCE_DIR):$(TEST_DIR):$(JUNIT_JAR)" -d $(BUILD_DIR)/$(TEST_DIR) $(JAVAC_OPTIONS) $<
 	@ echo javac $< $(JAVAC_OPTIONS)
 
 # Generate AST classes

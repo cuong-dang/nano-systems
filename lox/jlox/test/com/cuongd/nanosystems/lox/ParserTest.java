@@ -1,15 +1,31 @@
 package com.cuongd.nanosystems.lox;
 
-import static com.cuongd.nanosystems.lox.TokenType.*;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Arrays;
-import org.junit.Test;
+import java.util.List;
+import org.junit.jupiter.api.Test;
 
 public class ParserTest {
   @Test
   public void primary() {
-    Expr parsed = new Parser(Arrays.asList(new Token(NUMBER, "1", 1.0, 0))).parse();
-    assertInstanceOf(Expr.Literal.class, parsed);
+    assertRpn("1.0", Arrays.asList(TestToken.NUMBER1, TestToken.EOF));
+  }
+
+  @Test
+  public void comma() {
+    assertRpn(
+        "3.0",
+        Arrays.asList(
+            TestToken.NUMBER1,
+            TestToken.PLUS,
+            TestToken.NUMBER2,
+            TestToken.COMMA,
+            TestToken.NUMBER3,
+            TestToken.EOF));
+  }
+
+  private void assertRpn(String expected, List<Token> tokens) {
+    assertEquals(expected, new RpnPrinter().print(new Parser(tokens).parse()));
   }
 }

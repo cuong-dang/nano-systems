@@ -15,10 +15,18 @@ class Parser {
 
   Expr parse() {
     try {
-      return expression();
+      return comma();
     } catch (ParseError error) {
       return null;
     }
+  }
+
+  private Expr comma() {
+    Expr expr = expression();
+    while (matchAny(COMMA)) {
+      expr = expression();
+    }
+    return expr;
   }
 
   private Expr expression() {
