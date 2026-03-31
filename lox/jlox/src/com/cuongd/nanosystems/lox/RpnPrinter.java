@@ -2,6 +2,8 @@ package com.cuongd.nanosystems.lox;
 
 import static com.cuongd.nanosystems.lox.TokenType.MINUS;
 
+import com.cuongd.nanosystems.lox.Expr.Comma;
+
 class RpnPrinter implements Expr.Visitor<String> {
 
   String print(Expr expr) {
@@ -31,6 +33,14 @@ class RpnPrinter implements Expr.Visitor<String> {
       operator = "~";
     }
     return expr.right.accept(this) + " " + operator;
+  }
+
+  public String visitCommaExpr(Comma expr) {
+    StringBuilder sb = new StringBuilder();
+    for (Expr e : expr.exprs) {
+      sb.append(e.accept(this) + ",");
+    }
+    return sb.toString();
   }
 
   @Override

@@ -2,6 +2,7 @@ package com.cuongd.nanosystems.lox;
 
 import static com.cuongd.nanosystems.lox.TokenType.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -37,11 +38,12 @@ class Parser {
   }
 
   private Expr comma() {
-    Expr expr = equality();
+    List<Expr> exprs = new ArrayList<>();
+    exprs.add(equality());
     while (matchAny(COMMA)) {
-      expr = equality();
+      exprs.add(equality());
     }
-    return expr;
+    return exprs.size() == 1 ? exprs.get(0) : new Expr.Comma(exprs);
   }
 
   private Expr equality() {

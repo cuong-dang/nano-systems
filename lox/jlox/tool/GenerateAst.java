@@ -20,6 +20,7 @@ public class GenerateAst {
             "Grouping: Expr expression",
             "Literal: Object value",
             "Unary: Token operator, Expr right",
+            "Comma: List<Expr> exprs",
             "Ternary: Expr cond, Expr yes, Expr no"));
   }
 
