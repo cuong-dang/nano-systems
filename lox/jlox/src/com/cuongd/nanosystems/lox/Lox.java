@@ -45,7 +45,7 @@ public class Lox {
     Scanner scanner = new Scanner(source);
     List<Token> tokens = scanner.scanTokens();
 
-    System.out.println(new RpnPrinter().print(new Parser(tokens).parse()));
+    System.out.println(new Interpreter().eval(new Parser(tokens).parse()));
   }
 
   static void error(Token token, String message) {
