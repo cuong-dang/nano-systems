@@ -15,22 +15,33 @@ class Parser {
 
   Expr parse() {
     try {
-      return comma();
+      return expression();
     } catch (ParseError error) {
       return null;
     }
   }
 
-  private Expr comma() {
-    Expr expr = expression();
-    while (matchAny(COMMA)) {
-      expr = expression();
+  private Expr expression() {
+    return ternary();
+  }
+
+  private Expr ternary() {
+    Expr expr = comma();
+    if (matchAny(QUESTION)) {
+      Expr yes = ternary();
+      consume(COLON, "Expect ':' in ternary expression.");
+      Expr no = ternary();
+      return new Expr.Ternary(expr, yes, no);
     }
     return expr;
   }
 
-  private Expr expression() {
-    return equality();
+  private Expr comma() {
+    Expr expr = equality();
+    while (matchAny(COMMA)) {
+      expr = equality();
+    }
+    return expr;
   }
 
   private Expr equality() {

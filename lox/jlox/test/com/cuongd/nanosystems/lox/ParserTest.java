@@ -25,6 +25,23 @@ public class ParserTest {
             TestToken.EOF));
   }
 
+  @Test
+  public void ternary() {
+    assertRpn(
+        "1.0 2.0 3.0 4.0 5.0 ?: ?:",
+        Arrays.asList(
+            TestToken.NUMBER1,
+            TestToken.QUESTION,
+            TestToken.NUMBER2,
+            TestToken.COLON,
+            TestToken.NUMBER3,
+            TestToken.QUESTION,
+            TestToken.NUMBER4,
+            TestToken.COLON,
+            TestToken.NUMBER5,
+            TestToken.EOF));
+  }
+
   private void assertRpn(String expected, List<Token> tokens) {
     assertEquals(expected, new RpnPrinter().print(new Parser(tokens).parse()));
   }

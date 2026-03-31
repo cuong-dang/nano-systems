@@ -32,4 +32,14 @@ class RpnPrinter implements Expr.Visitor<String> {
     }
     return expr.right.accept(this) + " " + operator;
   }
+
+  @Override
+  public String visitTernaryExpr(Expr.Ternary expr) {
+    return expr.cond.accept(this)
+        + " "
+        + expr.yes.accept(this)
+        + " "
+        + expr.no.accept(this)
+        + " ?:";
+  }
 }
