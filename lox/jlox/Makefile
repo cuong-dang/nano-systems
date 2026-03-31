@@ -44,6 +44,9 @@ ARGS ?=
 run: default
 	@ java -cp $(BUILD_DIR)/$(SOURCE_DIR) com.cuongd.nanosystems.lox.Lox $(ARGS)
 
+todo:
+	@ grep -rn "TODO" . --exclude="Makefile"
+
 # Build src & test
 $(BUILD_DIR)/$(SOURCE_DIR)/%.class: $(SOURCE_DIR)/%.java
 	@ mkdir -p $(dir $@)
@@ -72,4 +75,4 @@ $(GJF_JAR):
 $(JUNIT_JAR):
 	curl -L -o $@ https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/6.1.0-M1/junit-platform-console-standalone-6.1.0-M1.jar
 
-.PHONY: default clean fmt test run generate-ast
+.PHONY: default clean fmt test run todo generate-ast

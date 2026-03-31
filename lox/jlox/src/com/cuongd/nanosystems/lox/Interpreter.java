@@ -22,28 +22,36 @@ class Interpreter implements Expr.Visitor<Object> {
         } else if (left instanceof String && right instanceof String) {
           return (String) left + (String) right;
         }
-        break;
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case MINUS:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left - (double) right;
       case STAR:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left * (double) right;
       case SLASH:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left / (double) right;
       // Boolean.
       case GREATER:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left > (double) right;
       case GREATER_EQUAL:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left >= (double) right;
       case LESS:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left < (double) right;
       case LESS_EQUAL:
+        checkNumberOperand(expr.operator, left, right);
         return (double) left <= (double) right;
       case BANG_EQUAL:
         return !isEqual(left, right);
       case EQUAL_EQUAL:
         return isEqual(left, right);
+      default:
+        throw new AssertionError();
     }
-    throw new AssertionError();
   }
 
   @Override
@@ -64,9 +72,11 @@ class Interpreter implements Expr.Visitor<Object> {
       case BANG:
         return !isTruthy(right);
       case MINUS:
+        checkNumberOperand(expr.operator, right);
         return -(double) right;
+      default:
+        throw new AssertionError();
     }
-    throw new AssertionError();
   }
 
   @Override
@@ -87,6 +97,16 @@ class Interpreter implements Expr.Visitor<Object> {
     return eval(expr.no);
   }
 
+  private void checkNumberOperand(Token operator, Object operand) {
+    if (operand instanceof Double) return;
+    throw new RuntimeError(operator, "Operand must be a number.");
+  }
+
+  private void checkNumberOperand(Token operator, Object left, Object right) {
+    if (left instanceof Double && right instanceof Double) return;
+    throw new RuntimeError(operator, "Operands must be numbers.");
+  }
+
   // TODO: Maybe come back and revisit it to make it more like Python.
   private boolean isTruthy(Object object) {
     if (object == null) return false;
@@ -101,7 +121,27 @@ class Interpreter implements Expr.Visitor<Object> {
     return a.equals(b);
   }
 
-  Object eval(Expr expr) {
+  private Object eval(Expr expr) {
     return expr.accept(this);
+  }
+
+  void interpret(Expr expression) {
+    try {
+      Object value = eval(expression);
+      System.out.println(stringify(value));
+    } catch (RuntimeError error) {
+      Lox.runtimeError(error);
+    }
+  }
+
+  private String stringify(Object object) {
+    if (object == null) return "nil";
+    String text = object.toString();
+    if (object instanceof Double) {
+      if (text.endsWith(".0")) {
+        return text.substring(0, text.length() - 2);
+      }
+    }
+    return text;
   }
 }
