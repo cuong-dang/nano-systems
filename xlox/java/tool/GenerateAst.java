@@ -12,6 +12,7 @@ public class GenerateAst {
       System.exit(64);
     }
     String outputDir = args[0];
+
     defineAst(
         outputDir,
         "Expr",
@@ -22,6 +23,8 @@ public class GenerateAst {
             "Unary: Token operator, Expr right",
             "Comma: List<Expr> exprs",
             "Ternary: Expr cond, Expr yes, Expr no"));
+    defineAst(
+        outputDir, "Stmt", Arrays.asList("Expression: Expr expression", "Print: Expr expression"));
   }
 
   private static void defineAst(String outputDir, String baseName, List<String> types)

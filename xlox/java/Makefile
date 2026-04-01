@@ -30,6 +30,7 @@ clean:
 # AST classes
 	@ rm -rf $(SOURCE_DIR)/$(PKG_PATH)/.ast.done
 	@ rm -rf $(SOURCE_DIR)/$(PKG_PATH)/Expr.java
+	@ rm -rf $(SOURCE_DIR)/$(PKG_PATH)/Stmt.java
 
 fmt: $(GJF_JAR)
 	@ find . -name "*.java" -print0 | \

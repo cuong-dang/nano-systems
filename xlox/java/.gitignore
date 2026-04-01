@@ -1,5 +1,6 @@
 **/*.jar
 build
 # AST classes
-src/com/cuongd/nanosystems/lox/.ast.done
-src/com/cuongd/nanosystems/lox/Expr.java
+src/com/cuongd/nanosystems/xlox/.ast.done
+src/com/cuongd/nanosystems/xlox/Expr.java
+src/com/cuongd/nanosystems/xlox/Stmt.java
