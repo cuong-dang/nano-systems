@@ -10,6 +10,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   private Object lastStatementResult;
 
   @Override
+  public Object visitAssignExpr(Assign expr) {
+    Object value = eval(expr.value);
+    environment.define(expr.name.lexeme, value);
+    return value;
+  }
+
+  @Override
   public Object visitBinaryExpr(Binary expr) {
     Object left = eval(expr.left);
     Object right = eval(expr.right);

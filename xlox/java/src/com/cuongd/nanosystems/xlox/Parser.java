@@ -80,11 +80,28 @@ class Parser {
 
   private Expr comma() {
     List<Expr> exprs = new ArrayList<>();
-    exprs.add(equality());
-    while (matchAny(COMMA)) {
-      exprs.add(equality());
-    }
+    do {
+      exprs.add(assignment());
+    } while (matchAny(COMMA));
     return exprs.size() == 1 ? exprs.get(0) : new Expr.Comma(exprs);
+  }
+
+  private Expr assignment() {
+    Expr expr = equality();
+
+    if (matchAny(EQUAL)) {
+      Token equals = previous();
+      Expr value = assignment();
+
+      if (expr instanceof Expr.Variable) {
+        Token name = ((Expr.Variable) expr).name;
+        return new Expr.Assign(name, value);
+      }
+
+      error(equals, "Invalid assignment target.");
+    }
+
+    return expr;
   }
 
   private Expr equality() {
