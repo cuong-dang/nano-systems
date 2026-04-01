@@ -1,32 +1,6 @@
 package com.cuongd.nanosystems.xlox;
 
-import static com.cuongd.nanosystems.xlox.TokenType.BANG;
-import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
-import static com.cuongd.nanosystems.xlox.TokenType.COLON;
-import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
-import static com.cuongd.nanosystems.xlox.TokenType.EOF;
-import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
-import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
-import static com.cuongd.nanosystems.xlox.TokenType.FALSE;
-import static com.cuongd.nanosystems.xlox.TokenType.GREATER;
-import static com.cuongd.nanosystems.xlox.TokenType.GREATER_EQUAL;
-import static com.cuongd.nanosystems.xlox.TokenType.IDENTIFIER;
-import static com.cuongd.nanosystems.xlox.TokenType.LEFT_PAREN;
-import static com.cuongd.nanosystems.xlox.TokenType.LESS;
-import static com.cuongd.nanosystems.xlox.TokenType.LESS_EQUAL;
-import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
-import static com.cuongd.nanosystems.xlox.TokenType.NIL;
-import static com.cuongd.nanosystems.xlox.TokenType.NUMBER;
-import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
-import static com.cuongd.nanosystems.xlox.TokenType.PRINT;
-import static com.cuongd.nanosystems.xlox.TokenType.QUESTION;
-import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_PAREN;
-import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
-import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
-import static com.cuongd.nanosystems.xlox.TokenType.STAR;
-import static com.cuongd.nanosystems.xlox.TokenType.STRING;
-import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
-import static com.cuongd.nanosystems.xlox.TokenType.VAR;
+import static com.cuongd.nanosystems.xlox.TokenType.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -177,6 +151,16 @@ class Parser {
     return tokens.get(current - 1);
   }
 
+  private boolean matchAny(TokenType... types) {
+    for (TokenType type : types) {
+      if (check(type)) {
+        advance();
+        return true;
+      }
+    }
+    return false;
+  }
+
   private Token advance() {
     if (!isAtEnd()) current++;
     return previous();
@@ -187,16 +171,6 @@ class Parser {
     if (type == SEMICOLON && replMode && isAtEnd()) return advance();
     if (check(type)) return advance();
     throw error(peek(), message);
-  }
-
-  private boolean matchAny(TokenType... types) {
-    for (TokenType type : types) {
-      if (check(type)) {
-        advance();
-        return true;
-      }
-    }
-    return false;
   }
 
   private boolean check(TokenType type) {

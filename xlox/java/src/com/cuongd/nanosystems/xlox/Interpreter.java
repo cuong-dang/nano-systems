@@ -1,26 +1,20 @@
 package com.cuongd.nanosystems.xlox;
 
-import com.cuongd.nanosystems.xlox.Expr.Binary;
-import com.cuongd.nanosystems.xlox.Expr.Comma;
-import com.cuongd.nanosystems.xlox.Expr.Grouping;
-import com.cuongd.nanosystems.xlox.Expr.Literal;
-import com.cuongd.nanosystems.xlox.Expr.Ternary;
-import com.cuongd.nanosystems.xlox.Expr.Unary;
-import com.cuongd.nanosystems.xlox.Expr.Variable;
+import com.cuongd.nanosystems.xlox.Expr.*;
 import com.cuongd.nanosystems.xlox.Stmt.Expression;
 import com.cuongd.nanosystems.xlox.Stmt.Print;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
-  private Environment environment = new Environment();
+  private final Environment environment = new Environment();
   private Object lastStatementResult;
 
   @Override
   public Object visitBinaryExpr(Binary expr) {
     Object left = eval(expr.left);
     Object right = eval(expr.right);
-    double leftDouble = left instanceof Double ? (double) left : null;
-    double rightDouble = right instanceof Double ? (double) right : null;
+    Double leftDouble = left instanceof Double ? (double) left : null;
+    Double rightDouble = right instanceof Double ? (double) right : null;
     String leftString = left instanceof String ? (String) left : null;
     String rightString = right instanceof String ? (String) right : null;
 

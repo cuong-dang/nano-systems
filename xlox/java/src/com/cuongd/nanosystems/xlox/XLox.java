@@ -47,20 +47,16 @@ public class XLox {
   private static void run(String source, boolean replMode) {
     Scanner scanner = new Scanner(source);
     List<Token> tokens = scanner.scanTokens();
+    if (hadError) return; // Syntax error.
 
-    // Stop if there was a syntax error.
-    if (hadError) return;
-    try {
-      List<Stmt> statements = new Parser(tokens, replMode).parse();
-      // Stop if there was a parser error.
-      if (hadError) return;
+    List<Stmt> statements = new Parser(tokens, replMode).parse();
+    if (hadError) return; // Parser error.
 
-      interpreter.interpret(statements);
-      if (replMode && interpreter.lastStatementResult() != null) {
-        System.out.println(interpreter.lastStatementResult()); // TODO: Impl a Printer.
-      }
-    } catch (Parser.ParseError error) {
-      return;
+    interpreter.interpret(statements);
+    if (hadRuntimeError) return; // Runtime error.
+
+    if (replMode && interpreter.lastStatementResult() != null) {
+      System.out.println(interpreter.lastStatementResult()); // TODO: Impl a Printer.
     }
   }
 
