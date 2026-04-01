@@ -3,8 +3,10 @@ package com.cuongd.nanosystems.xlox;
 import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
 
 import com.cuongd.nanosystems.xlox.Expr.Comma;
+import com.cuongd.nanosystems.xlox.Expr.Variable;
 import com.cuongd.nanosystems.xlox.Stmt.Expression;
 import com.cuongd.nanosystems.xlox.Stmt.Print;
+import com.cuongd.nanosystems.xlox.Stmt.Var;
 
 class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
@@ -66,6 +68,16 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
   @Override
   public String visitPrintStmt(Print stmt) {
-    return stmt.expression.accept(this);
+    throw new UnsupportedOperationException("Unimplemented method 'visitPrintStmt'");
+  }
+
+  @Override
+  public String visitVarStmt(Var stmt) {
+    throw new UnsupportedOperationException("Unimplemented method 'visitVarStmt'");
+  }
+
+  @Override
+  public String visitVariableExpr(Variable expr) {
+    throw new UnsupportedOperationException("Unimplemented method 'visitVariableExpr'");
   }
 }

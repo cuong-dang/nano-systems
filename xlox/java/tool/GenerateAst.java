@@ -17,14 +17,21 @@ public class GenerateAst {
         outputDir,
         "Expr",
         Arrays.asList(
+            // "Assign: Token name, Expr value",
             "Binary: Expr left, Token operator, Expr right",
+            "Comma: List<Expr> exprs",
             "Grouping: Expr expression",
             "Literal: Object value",
+            "Ternary: Expr cond, Expr yes, Expr no",
             "Unary: Token operator, Expr right",
-            "Comma: List<Expr> exprs",
-            "Ternary: Expr cond, Expr yes, Expr no"));
+            "Variable: Token name"));
     defineAst(
-        outputDir, "Stmt", Arrays.asList("Expression: Expr expression", "Print: Expr expression"));
+        outputDir,
+        "Stmt",
+        Arrays.asList(
+            "Expression: Expr expression",
+            "Print: Expr expression",
+            "Var: Token name, Expr initializer"));
   }
 
   private static void defineAst(String outputDir, String baseName, List<String> types)

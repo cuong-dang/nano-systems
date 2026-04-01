@@ -6,11 +6,13 @@ import com.cuongd.nanosystems.xlox.Expr.Grouping;
 import com.cuongd.nanosystems.xlox.Expr.Literal;
 import com.cuongd.nanosystems.xlox.Expr.Ternary;
 import com.cuongd.nanosystems.xlox.Expr.Unary;
+import com.cuongd.nanosystems.xlox.Expr.Variable;
 import com.cuongd.nanosystems.xlox.Stmt.Expression;
 import com.cuongd.nanosystems.xlox.Stmt.Print;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
+  private Environment environment = new Environment();
   private Object lastStatementResult;
 
   @Override
@@ -81,6 +83,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitCommaExpr(Comma expr) {
+    Object result = null;
+    ;
+    for (Expr e : expr.exprs) {
+      result = eval(e);
+    }
+    return result;
+  }
+
+  @Override
   public Object visitGroupingExpr(Grouping expr) {
     return eval(expr.expression);
   }
@@ -88,6 +100,14 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   @Override
   public Object visitLiteralExpr(Literal expr) {
     return expr.value;
+  }
+
+  @Override
+  public Object visitTernaryExpr(Ternary expr) {
+    if (isTruthy(eval(expr.cond))) {
+      return eval(expr.yes);
+    }
+    return eval(expr.no);
   }
 
   @Override
@@ -106,21 +126,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
-  public Object visitCommaExpr(Comma expr) {
-    Object result = null;
-    ;
-    for (Expr e : expr.exprs) {
-      result = eval(e);
-    }
-    return result;
-  }
-
-  @Override
-  public Object visitTernaryExpr(Ternary expr) {
-    if (isTruthy(eval(expr.cond))) {
-      return eval(expr.yes);
-    }
-    return eval(expr.no);
+  public Object visitVariableExpr(Variable expr) {
+    return environment.get(expr.name);
   }
 
   @Override
@@ -132,6 +139,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   public Object visitPrintStmt(Print stmt) {
     Object value = eval(stmt.expression);
     System.out.println(stringify(value));
+    return null;
+  }
+
+  @Override
+  public Void visitVarStmt(Stmt.Var stmt) {
+    Object value = null;
+    if (stmt.initializer != null) {
+      value = eval(stmt.initializer);
+    }
+    environment.define(stmt.name.lexeme, value);
     return null;
   }
 

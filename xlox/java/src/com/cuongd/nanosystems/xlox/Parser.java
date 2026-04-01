@@ -5,10 +5,12 @@ import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.COLON;
 import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
 import static com.cuongd.nanosystems.xlox.TokenType.EOF;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.FALSE;
 import static com.cuongd.nanosystems.xlox.TokenType.GREATER;
 import static com.cuongd.nanosystems.xlox.TokenType.GREATER_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.IDENTIFIER;
 import static com.cuongd.nanosystems.xlox.TokenType.LEFT_PAREN;
 import static com.cuongd.nanosystems.xlox.TokenType.LESS;
 import static com.cuongd.nanosystems.xlox.TokenType.LESS_EQUAL;
@@ -24,6 +26,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
 import static com.cuongd.nanosystems.xlox.TokenType.STAR;
 import static com.cuongd.nanosystems.xlox.TokenType.STRING;
 import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
+import static com.cuongd.nanosystems.xlox.TokenType.VAR;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,9 +45,30 @@ class Parser {
   List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
     while (!isAtEnd()) {
-      statements.add(statement());
+      statements.add(declaration());
     }
     return statements;
+  }
+
+  private Stmt declaration() {
+    try {
+      if (matchAny(VAR)) return varDeclaration();
+
+      return statement();
+    } catch (ParseError error) {
+      synchronize();
+      return null;
+    }
+  }
+
+  private Stmt varDeclaration() {
+    Token name = consume(IDENTIFIER, "Expect variable name.");
+    Expr initializer = null;
+    if (matchAny(EQUAL)) {
+      initializer = expression();
+    }
+    consume(SEMICOLON, "Expect ';' after variable declaration.");
+    return new Stmt.Var(name, initializer);
   }
 
   private Stmt statement() {
@@ -55,17 +79,13 @@ class Parser {
 
   private Stmt printStatement() {
     Expr expr = expression();
-    if (!(replMode && isAtEnd())) {
-      consume(SEMICOLON, "Expect ';' after statement.");
-    }
+    consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Print(expr);
   }
 
   private Stmt expressionStatement() {
     Expr expr = expression();
-    if (!(replMode && isAtEnd())) {
-      consume(SEMICOLON, "Expect ';' after statement.");
-    }
+    consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Expression(expr);
   }
 
@@ -123,6 +143,8 @@ class Parser {
 
     if (matchAny(NUMBER, STRING)) return new Expr.Literal(previous().literal);
 
+    if (matchAny(IDENTIFIER)) return new Expr.Variable(previous());
+
     if (matchAny(LEFT_PAREN)) {
       Expr expr = expression();
       consume(RIGHT_PAREN, "Expect ')' after expression.");
@@ -161,6 +183,8 @@ class Parser {
   }
 
   private Token consume(TokenType type, String message) {
+    // Special case for SEMICOLON in REPL mode.
+    if (type == SEMICOLON && replMode && isAtEnd()) return advance();
     if (check(type)) return advance();
     throw error(peek(), message);
   }
