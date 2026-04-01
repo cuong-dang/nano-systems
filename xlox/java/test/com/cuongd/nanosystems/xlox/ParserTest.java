@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Arrays;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 public class ParserTest {
@@ -43,6 +44,6 @@ public class ParserTest {
   }
 
   private void assertRpn(String expected, List<Token> tokens) {
-    assertEquals(expected, new RpnPrinter().print(new Parser(tokens).parse()));
+    assertEquals(expected, new RpnPrinter().print(new Parser(tokens, true).parse().get(0)));
   }
 }

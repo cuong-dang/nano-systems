@@ -26,7 +26,7 @@ public class XLox {
 
   private static void runFile(String path) throws IOException {
     byte[] bytes = Files.readAllBytes(Paths.get(path));
-    run(new String(bytes, Charset.defaultCharset()));
+    run(new String(bytes, Charset.defaultCharset()), false);
     if (hadError) System.exit(65);
     if (hadRuntimeError) System.exit(70);
   }
@@ -39,23 +39,29 @@ public class XLox {
       System.out.print("> ");
       String line = reader.readLine();
       if (line == null) break;
-      run(line);
+      run(line, true);
       hadError = false;
     }
   }
 
-  private static void run(String source) {
+  private static void run(String source, boolean replMode) {
     Scanner scanner = new Scanner(source);
     List<Token> tokens = scanner.scanTokens();
 
     // Stop if there was a syntax error.
     if (hadError) return;
-    Expr expression = new Parser(tokens).parse();
-    // Stop if there was a parser error.
-    if (hadError) return;
+    try {
+      List<Stmt> statements = new Parser(tokens, replMode).parse();
+      // Stop if there was a parser error.
+      if (hadError) return;
 
-    interpreter.interpret(expression);
-    // System.out.println(new RpnPrinter().print(expression));
+      interpreter.interpret(statements);
+      if (replMode && interpreter.lastStatementResult() != null) {
+        System.out.println(interpreter.lastStatementResult()); // TODO: Impl a Printer.
+      }
+    } catch (Parser.ParseError error) {
+      return;
+    }
   }
 
   static void error(Token token, String message) {

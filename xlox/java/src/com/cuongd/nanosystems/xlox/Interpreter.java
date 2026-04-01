@@ -6,8 +6,12 @@ import com.cuongd.nanosystems.xlox.Expr.Grouping;
 import com.cuongd.nanosystems.xlox.Expr.Literal;
 import com.cuongd.nanosystems.xlox.Expr.Ternary;
 import com.cuongd.nanosystems.xlox.Expr.Unary;
+import com.cuongd.nanosystems.xlox.Stmt.Expression;
+import com.cuongd.nanosystems.xlox.Stmt.Print;
+import java.util.List;
 
-class Interpreter implements Expr.Visitor<Object> {
+class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
+  private Object lastStatementResult;
 
   @Override
   public Object visitBinaryExpr(Binary expr) {
@@ -119,6 +123,40 @@ class Interpreter implements Expr.Visitor<Object> {
     return eval(expr.no);
   }
 
+  @Override
+  public Object visitExpressionStmt(Expression stmt) {
+    return eval(stmt.expression);
+  }
+
+  @Override
+  public Object visitPrintStmt(Print stmt) {
+    Object value = eval(stmt.expression);
+    System.out.println(stringify(value));
+    return null;
+  }
+
+  void interpret(List<Stmt> statements) {
+    for (Stmt statement : statements) {
+      try {
+        lastStatementResult = execute(statement);
+      } catch (RuntimeError error) {
+        XLox.runtimeError(error);
+      }
+    }
+  }
+
+  Object lastStatementResult() {
+    return lastStatementResult;
+  }
+
+  private Object eval(Expr expr) {
+    return expr.accept(this);
+  }
+
+  private Object execute(Stmt statement) {
+    return statement.accept(this);
+  }
+
   private void checkNumberOperand(Token operator, Object operand) {
     if (operand instanceof Double) return;
     throw new RuntimeError(operator, "Operand must be a number.");
@@ -141,19 +179,6 @@ class Interpreter implements Expr.Visitor<Object> {
     if (a == null) return false;
 
     return a.equals(b);
-  }
-
-  private Object eval(Expr expr) {
-    return expr.accept(this);
-  }
-
-  void interpret(Expr expression) {
-    try {
-      Object value = eval(expression);
-      System.out.println(stringify(value));
-    } catch (RuntimeError error) {
-      XLox.runtimeError(error);
-    }
   }
 
   private String stringify(Object object) {

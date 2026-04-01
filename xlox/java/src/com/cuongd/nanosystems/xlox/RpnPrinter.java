@@ -3,11 +3,17 @@ package com.cuongd.nanosystems.xlox;
 import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
 
 import com.cuongd.nanosystems.xlox.Expr.Comma;
+import com.cuongd.nanosystems.xlox.Stmt.Expression;
+import com.cuongd.nanosystems.xlox.Stmt.Print;
 
-class RpnPrinter implements Expr.Visitor<String> {
+class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
   String print(Expr expr) {
     return expr.accept(this);
+  }
+
+  String print(Stmt stmt) {
+    return stmt.accept(this);
   }
 
   @Override
@@ -51,5 +57,15 @@ class RpnPrinter implements Expr.Visitor<String> {
         + " "
         + expr.no.accept(this)
         + " ?:";
+  }
+
+  @Override
+  public String visitExpressionStmt(Expression stmt) {
+    return stmt.expression.accept(this);
+  }
+
+  @Override
+  public String visitPrintStmt(Print stmt) {
+    return stmt.expression.accept(this);
   }
 }

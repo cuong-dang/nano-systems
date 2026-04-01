@@ -16,6 +16,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
 import static com.cuongd.nanosystems.xlox.TokenType.NIL;
 import static com.cuongd.nanosystems.xlox.TokenType.NUMBER;
 import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
+import static com.cuongd.nanosystems.xlox.TokenType.PRINT;
 import static com.cuongd.nanosystems.xlox.TokenType.QUESTION;
 import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_PAREN;
 import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
@@ -30,18 +31,42 @@ import java.util.function.Supplier;
 
 class Parser {
   private final List<Token> tokens;
+  private final boolean replMode;
   private int current = 0;
 
-  Parser(List<Token> tokens) {
+  Parser(List<Token> tokens, boolean replMode) {
     this.tokens = tokens;
+    this.replMode = replMode;
   }
 
-  Expr parse() {
-    try {
-      return expression();
-    } catch (ParseError error) {
-      return null;
+  List<Stmt> parse() {
+    List<Stmt> statements = new ArrayList<>();
+    while (!isAtEnd()) {
+      statements.add(statement());
     }
+    return statements;
+  }
+
+  private Stmt statement() {
+    if (matchAny(PRINT)) return printStatement();
+
+    return expressionStatement();
+  }
+
+  private Stmt printStatement() {
+    Expr expr = expression();
+    if (!(replMode && isAtEnd())) {
+      consume(SEMICOLON, "Expect ';' after statement.");
+    }
+    return new Stmt.Print(expr);
+  }
+
+  private Stmt expressionStatement() {
+    Expr expr = expression();
+    if (!(replMode && isAtEnd())) {
+      consume(SEMICOLON, "Expect ';' after statement.");
+    }
+    return new Stmt.Expression(expr);
   }
 
   private Expr expression() {
@@ -183,5 +208,5 @@ class Parser {
     }
   }
 
-  private static class ParseError extends RuntimeException {}
+  static class ParseError extends RuntimeException {}
 }
