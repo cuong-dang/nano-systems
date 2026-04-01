@@ -1,6 +1,46 @@
 package com.cuongd.nanosystems.lox;
 
-import static com.cuongd.nanosystems.lox.TokenType.*;
+import static com.cuongd.nanosystems.lox.TokenType.AND;
+import static com.cuongd.nanosystems.lox.TokenType.BANG;
+import static com.cuongd.nanosystems.lox.TokenType.BANG_EQUAL;
+import static com.cuongd.nanosystems.lox.TokenType.CLASS;
+import static com.cuongd.nanosystems.lox.TokenType.COLON;
+import static com.cuongd.nanosystems.lox.TokenType.COMMA;
+import static com.cuongd.nanosystems.lox.TokenType.DOT;
+import static com.cuongd.nanosystems.lox.TokenType.ELSE;
+import static com.cuongd.nanosystems.lox.TokenType.EOF;
+import static com.cuongd.nanosystems.lox.TokenType.EQUAL;
+import static com.cuongd.nanosystems.lox.TokenType.EQUAL_EQUAL;
+import static com.cuongd.nanosystems.lox.TokenType.FALSE;
+import static com.cuongd.nanosystems.lox.TokenType.FOR;
+import static com.cuongd.nanosystems.lox.TokenType.FUN;
+import static com.cuongd.nanosystems.lox.TokenType.GREATER;
+import static com.cuongd.nanosystems.lox.TokenType.GREATER_EQUAL;
+import static com.cuongd.nanosystems.lox.TokenType.IDENTIFIER;
+import static com.cuongd.nanosystems.lox.TokenType.IF;
+import static com.cuongd.nanosystems.lox.TokenType.LEFT_BRACE;
+import static com.cuongd.nanosystems.lox.TokenType.LEFT_PAREN;
+import static com.cuongd.nanosystems.lox.TokenType.LESS;
+import static com.cuongd.nanosystems.lox.TokenType.LESS_EQUAL;
+import static com.cuongd.nanosystems.lox.TokenType.MINUS;
+import static com.cuongd.nanosystems.lox.TokenType.NIL;
+import static com.cuongd.nanosystems.lox.TokenType.NUMBER;
+import static com.cuongd.nanosystems.lox.TokenType.OR;
+import static com.cuongd.nanosystems.lox.TokenType.PLUS;
+import static com.cuongd.nanosystems.lox.TokenType.PRINT;
+import static com.cuongd.nanosystems.lox.TokenType.QUESTION;
+import static com.cuongd.nanosystems.lox.TokenType.RETURN;
+import static com.cuongd.nanosystems.lox.TokenType.RIGHT_BRACE;
+import static com.cuongd.nanosystems.lox.TokenType.RIGHT_PAREN;
+import static com.cuongd.nanosystems.lox.TokenType.SEMICOLON;
+import static com.cuongd.nanosystems.lox.TokenType.SLASH;
+import static com.cuongd.nanosystems.lox.TokenType.STAR;
+import static com.cuongd.nanosystems.lox.TokenType.STRING;
+import static com.cuongd.nanosystems.lox.TokenType.SUPER;
+import static com.cuongd.nanosystems.lox.TokenType.THIS;
+import static com.cuongd.nanosystems.lox.TokenType.TRUE;
+import static com.cuongd.nanosystems.lox.TokenType.VAR;
+import static com.cuongd.nanosystems.lox.TokenType.WHILE;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -100,7 +140,7 @@ class Scanner {
         addToken(match('=') ? GREATER_EQUAL : GREATER);
         break;
       case '<':
-        addToken(match('=') ? LESS_EQUAL : EQUAL_EQUAL);
+        addToken(match('=') ? LESS : LESS_EQUAL);
         break;
       case '/':
         if (match('/')) {

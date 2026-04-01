@@ -34,17 +34,33 @@ class Interpreter implements Expr.Visitor<Object> {
         return (double) left / (double) right;
       // Boolean.
       case GREATER:
-        checkNumberOperand(expr.operator, left, right);
-        return (double) left > (double) right;
+        if (left instanceof Double && right instanceof Double) {
+          return (double) left > (double) right;
+        } else if (left instanceof String && right instanceof String) {
+          return ((String) left).compareTo((String) right) > 0;
+        }
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case GREATER_EQUAL:
-        checkNumberOperand(expr.operator, left, right);
-        return (double) left >= (double) right;
+        if (left instanceof Double && right instanceof Double) {
+          return (double) left >= (double) right;
+        } else if (left instanceof String && right instanceof String) {
+          return ((String) left).compareTo((String) right) >= 0;
+        }
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case LESS:
-        checkNumberOperand(expr.operator, left, right);
-        return (double) left < (double) right;
+        if (left instanceof Double && right instanceof Double) {
+          return (double) left < (double) right;
+        } else if (left instanceof String && right instanceof String) {
+          return ((String) left).compareTo((String) right) < 0;
+        }
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case LESS_EQUAL:
-        checkNumberOperand(expr.operator, left, right);
-        return (double) left <= (double) right;
+        if (left instanceof Double && right instanceof Double) {
+          return (double) left <= (double) right;
+        } else if (left instanceof String && right instanceof String) {
+          return ((String) left).compareTo((String) right) <= 0;
+        }
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case BANG_EQUAL:
         return !isEqual(left, right);
       case EQUAL_EQUAL:

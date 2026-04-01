@@ -15,7 +15,7 @@ public class ParserTest {
   @Test
   public void comma() {
     assertRpn(
-        "3.0",
+        "1.0 2.0 +,3.0,",
         Arrays.asList(
             TestToken.NUMBER1,
             TestToken.PLUS,

@@ -50,9 +50,12 @@ public class Lox {
 
     // Stop if there was a syntax error.
     if (hadError) return;
-
     Expr expression = new Parser(tokens).parse();
+    // Stop if there was a parser error.
+    if (hadError) return;
+
     interpreter.interpret(expression);
+    // System.out.println(new RpnPrinter().print(expression));
   }
 
   static void error(Token token, String message) {
