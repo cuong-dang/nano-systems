@@ -1,4 +1,4 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
 enum TokenType {
   // Single-character tokens.

@@ -1,28 +1,28 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
-import static com.cuongd.nanosystems.lox.TokenType.BANG;
-import static com.cuongd.nanosystems.lox.TokenType.BANG_EQUAL;
-import static com.cuongd.nanosystems.lox.TokenType.COLON;
-import static com.cuongd.nanosystems.lox.TokenType.COMMA;
-import static com.cuongd.nanosystems.lox.TokenType.EOF;
-import static com.cuongd.nanosystems.lox.TokenType.EQUAL_EQUAL;
-import static com.cuongd.nanosystems.lox.TokenType.FALSE;
-import static com.cuongd.nanosystems.lox.TokenType.GREATER;
-import static com.cuongd.nanosystems.lox.TokenType.GREATER_EQUAL;
-import static com.cuongd.nanosystems.lox.TokenType.LEFT_PAREN;
-import static com.cuongd.nanosystems.lox.TokenType.LESS;
-import static com.cuongd.nanosystems.lox.TokenType.LESS_EQUAL;
-import static com.cuongd.nanosystems.lox.TokenType.MINUS;
-import static com.cuongd.nanosystems.lox.TokenType.NIL;
-import static com.cuongd.nanosystems.lox.TokenType.NUMBER;
-import static com.cuongd.nanosystems.lox.TokenType.PLUS;
-import static com.cuongd.nanosystems.lox.TokenType.QUESTION;
-import static com.cuongd.nanosystems.lox.TokenType.RIGHT_PAREN;
-import static com.cuongd.nanosystems.lox.TokenType.SEMICOLON;
-import static com.cuongd.nanosystems.lox.TokenType.SLASH;
-import static com.cuongd.nanosystems.lox.TokenType.STAR;
-import static com.cuongd.nanosystems.lox.TokenType.STRING;
-import static com.cuongd.nanosystems.lox.TokenType.TRUE;
+import static com.cuongd.nanosystems.xlox.TokenType.BANG;
+import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.COLON;
+import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
+import static com.cuongd.nanosystems.xlox.TokenType.EOF;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.FALSE;
+import static com.cuongd.nanosystems.xlox.TokenType.GREATER;
+import static com.cuongd.nanosystems.xlox.TokenType.GREATER_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.LEFT_PAREN;
+import static com.cuongd.nanosystems.xlox.TokenType.LESS;
+import static com.cuongd.nanosystems.xlox.TokenType.LESS_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
+import static com.cuongd.nanosystems.xlox.TokenType.NIL;
+import static com.cuongd.nanosystems.xlox.TokenType.NUMBER;
+import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
+import static com.cuongd.nanosystems.xlox.TokenType.QUESTION;
+import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_PAREN;
+import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
+import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
+import static com.cuongd.nanosystems.xlox.TokenType.STAR;
+import static com.cuongd.nanosystems.xlox.TokenType.STRING;
+import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -157,7 +157,7 @@ class Parser {
 
   // TODO: Revisit this error processing and handling.
   private ParseError error(Token token, String message) {
-    Lox.error(token, message);
+    XLox.error(token, message);
     return new ParseError();
   }
 

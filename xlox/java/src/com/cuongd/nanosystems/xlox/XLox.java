@@ -1,4 +1,4 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -8,7 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
-public class Lox {
+public class XLox {
   private static final Interpreter interpreter = new Interpreter();
   private static boolean hadError = false;
   private static boolean hadRuntimeError = false;

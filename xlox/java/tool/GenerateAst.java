@@ -29,7 +29,7 @@ public class GenerateAst {
     String path = outputDir + "/" + baseName + ".java";
     PrintWriter writer = new PrintWriter(path, "UTF-8");
 
-    writer.println("package com.cuongd.nanosystems.lox;");
+    writer.println("package com.cuongd.nanosystems.xlox;");
     writer.println();
     writer.println();
     writer.println("import java.util.List;");

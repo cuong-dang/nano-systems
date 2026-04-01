@@ -2,7 +2,7 @@
 BUILD_DIR := build
 SOURCE_DIR := src
 TEST_DIR := test
-PKG_PATH := com/cuongd/nanosystems/lox
+PKG_PATH := com/cuongd/nanosystems/xlox
 
 # The following is a hack to make sure we run generate-ast first and
 # then re-run make so that SOURCES include the generated classes.
@@ -42,7 +42,7 @@ test: $(JUNIT_JAR) default $(TEST_CLASSES)
 
 ARGS ?=
 run: default
-	@ java -cp $(BUILD_DIR)/$(SOURCE_DIR) com.cuongd.nanosystems.lox.Lox $(ARGS)
+	@ java -cp $(BUILD_DIR)/$(SOURCE_DIR) com.cuongd.nanosystems.xlox.XLox $(ARGS)
 
 todo:
 	@ grep -rn "TODO" . --exclude="Makefile"

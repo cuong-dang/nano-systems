@@ -1,6 +1,13 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
-import static com.cuongd.nanosystems.lox.TokenType.*;
+import static com.cuongd.nanosystems.xlox.TokenType.EOF;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.IDENTIFIER;
+import static com.cuongd.nanosystems.xlox.TokenType.NUMBER;
+import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
+import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
+import static com.cuongd.nanosystems.xlox.TokenType.VAR;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
@@ -18,9 +25,9 @@ public class ScannerTest {
 
     @Test
     void errorsIfNotTerminated() {
-      Lox.clearError();
+      XLox.clearError();
       scan("/*");
-      assertEquals(true, Lox.inError());
+      assertEquals(true, XLox.inError());
     }
 
     @Test
@@ -37,9 +44,9 @@ public class ScannerTest {
 
     @Test
     void errorsIfNotTerminatedNesting() {
-      Lox.clearError();
+      XLox.clearError();
       scan("/* /* */");
-      assertEquals(true, Lox.inError());
+      assertEquals(true, XLox.inError());
     }
   }
 

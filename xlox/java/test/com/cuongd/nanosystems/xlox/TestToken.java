@@ -1,4 +1,4 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
 class TestToken {
   static final Token PLUS = new Token(TokenType.PLUS, "+", null, 0);

@@ -1,8 +1,8 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
-import static com.cuongd.nanosystems.lox.TokenType.MINUS;
+import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
 
-import com.cuongd.nanosystems.lox.Expr.Comma;
+import com.cuongd.nanosystems.xlox.Expr.Comma;
 
 class RpnPrinter implements Expr.Visitor<String> {
 

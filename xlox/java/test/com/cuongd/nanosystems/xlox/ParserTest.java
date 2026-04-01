@@ -1,4 +1,4 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

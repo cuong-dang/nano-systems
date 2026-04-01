@@ -1,11 +1,11 @@
-package com.cuongd.nanosystems.lox;
+package com.cuongd.nanosystems.xlox;
 
-import com.cuongd.nanosystems.lox.Expr.Binary;
-import com.cuongd.nanosystems.lox.Expr.Comma;
-import com.cuongd.nanosystems.lox.Expr.Grouping;
-import com.cuongd.nanosystems.lox.Expr.Literal;
-import com.cuongd.nanosystems.lox.Expr.Ternary;
-import com.cuongd.nanosystems.lox.Expr.Unary;
+import com.cuongd.nanosystems.xlox.Expr.Binary;
+import com.cuongd.nanosystems.xlox.Expr.Comma;
+import com.cuongd.nanosystems.xlox.Expr.Grouping;
+import com.cuongd.nanosystems.xlox.Expr.Literal;
+import com.cuongd.nanosystems.xlox.Expr.Ternary;
+import com.cuongd.nanosystems.xlox.Expr.Unary;
 
 class Interpreter implements Expr.Visitor<Object> {
 
@@ -13,52 +13,58 @@ class Interpreter implements Expr.Visitor<Object> {
   public Object visitBinaryExpr(Binary expr) {
     Object left = eval(expr.left);
     Object right = eval(expr.right);
+    double leftDouble = left instanceof Double ? (double) left : null;
+    double rightDouble = right instanceof Double ? (double) right : null;
+    String leftString = left instanceof String ? (String) left : null;
+    String rightString = right instanceof String ? (String) right : null;
 
     switch (expr.operator.type) {
       // Arithmetic.
       case PLUS:
         if (left instanceof Double && right instanceof Double) {
-          return (double) left + (double) right;
+          return leftDouble + rightDouble;
         } else if (left instanceof String && right instanceof String) {
-          return (String) left + (String) right;
+          return leftString + rightString;
         }
         throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case MINUS:
         checkNumberOperand(expr.operator, left, right);
-        return (double) left - (double) right;
+        return leftDouble - rightDouble;
       case STAR:
         checkNumberOperand(expr.operator, left, right);
-        return (double) left * (double) right;
+        return leftDouble * rightDouble;
       case SLASH:
         checkNumberOperand(expr.operator, left, right);
-        return (double) left / (double) right;
+        // TODO: Can throw runtime error here if division by zero with two ints.
+        //   This would probably require to represent numbers as ints as well.
+        return leftDouble / rightDouble;
       // Boolean.
       case GREATER:
         if (left instanceof Double && right instanceof Double) {
-          return (double) left > (double) right;
+          return Double.compare(leftDouble, rightDouble) > 0;
         } else if (left instanceof String && right instanceof String) {
-          return ((String) left).compareTo((String) right) > 0;
+          return (leftString).compareTo(rightString) > 0;
         }
         throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case GREATER_EQUAL:
         if (left instanceof Double && right instanceof Double) {
-          return (double) left >= (double) right;
+          return Double.compare(leftDouble, rightDouble) >= 0;
         } else if (left instanceof String && right instanceof String) {
-          return ((String) left).compareTo((String) right) >= 0;
+          return (leftString).compareTo(rightString) >= 0;
         }
         throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case LESS:
         if (left instanceof Double && right instanceof Double) {
-          return (double) left < (double) right;
+          return Double.compare(leftDouble, rightDouble) < 0;
         } else if (left instanceof String && right instanceof String) {
-          return ((String) left).compareTo((String) right) < 0;
+          return (leftString).compareTo(rightString) < 0;
         }
         throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case LESS_EQUAL:
         if (left instanceof Double && right instanceof Double) {
-          return (double) left <= (double) right;
+          return Double.compare(leftDouble, rightDouble) <= 0;
         } else if (left instanceof String && right instanceof String) {
-          return ((String) left).compareTo((String) right) <= 0;
+          return (leftString).compareTo(rightString) <= 0;
         }
         throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");
       case BANG_EQUAL:
@@ -146,7 +152,7 @@ class Interpreter implements Expr.Visitor<Object> {
       Object value = eval(expression);
       System.out.println(stringify(value));
     } catch (RuntimeError error) {
-      Lox.runtimeError(error);
+      XLox.runtimeError(error);
     }
   }
 
