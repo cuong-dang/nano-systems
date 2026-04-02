@@ -1,18 +1,19 @@
 package com.cuongd.nanosystems.xlox;
 
 import com.cuongd.nanosystems.xlox.Expr.*;
+import com.cuongd.nanosystems.xlox.Stmt.Block;
 import com.cuongd.nanosystems.xlox.Stmt.Expression;
 import com.cuongd.nanosystems.xlox.Stmt.Print;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
-  private final Environment environment = new Environment();
+  private Environment environment = new Environment();
   private Object lastStatementResult;
 
   @Override
   public Object visitAssignExpr(Assign expr) {
     Object value = eval(expr.value);
-    environment.define(expr.name.lexeme, value);
+    environment.assign(expr.name, value);
     return value;
   }
 
@@ -137,6 +138,12 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitBlockStmt(Block stmt) {
+    executeBlock(stmt.statements, new Environment(environment));
+    return null;
+  }
+
+  @Override
   public Object visitPrintStmt(Print stmt) {
     Object value = eval(stmt.expression);
     System.out.println(stringify(value));
@@ -159,6 +166,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         lastStatementResult = execute(statement);
       } catch (RuntimeError error) {
         XLox.runtimeError(error);
+        return;
       }
     }
   }
@@ -173,6 +181,19 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   private Object execute(Stmt statement) {
     return statement.accept(this);
+  }
+
+  private void executeBlock(List<Stmt> statements, Environment environment) {
+    Environment previous = this.environment;
+    try {
+      this.environment = environment;
+
+      for (Stmt statement : statements) {
+        execute(statement);
+      }
+    } finally {
+      this.environment = previous;
+    }
   }
 
   private void checkNumberOperand(Token operator, Object operand) {

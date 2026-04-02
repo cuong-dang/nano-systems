@@ -41,6 +41,7 @@ public class XLox {
       if (line == null) break;
       run(line, true);
       hadError = false;
+      hadRuntimeError = false;
     }
   }
 
