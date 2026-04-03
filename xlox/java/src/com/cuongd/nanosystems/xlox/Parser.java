@@ -54,12 +54,12 @@ class Parser {
   List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
     while (!isAtEnd()) {
-      statements.add(declaration());
+      statements.add(declarationOrStatement());
     }
     return statements;
   }
 
-  private Stmt declaration() {
+  private Stmt declarationOrStatement() {
     try {
       if (matchAny(VAR)) return varDeclaration();
 
@@ -94,7 +94,7 @@ class Parser {
     List<Stmt> statements = new ArrayList<>();
 
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
-      statements.add(declaration());
+      statements.add(declarationOrStatement());
     }
     consume(RIGHT_BRACE, "Expect '}' after block.");
     return new Stmt.Block(statements);
@@ -104,8 +104,10 @@ class Parser {
     // Parse statement.
     consume(LEFT_PAREN, "Expect '(' after 'for'.");
     Stmt initializer = null;
-    if (!matchAny(SEMICOLON)) {
-      initializer = declaration();
+    if (matchAny(VAR)) {
+      initializer = varDeclaration();
+    } else if (!matchAny(SEMICOLON)) {
+      initializer = expressionStatement();
     }
     Expr condition = null;
     if (!check(SEMICOLON)) {
@@ -120,15 +122,15 @@ class Parser {
     Stmt body = statement();
 
     // Desugar to a while-loop.
-    condition = condition != null ? condition : new Expr.Literal(true);
     if (increment != null) {
       body = new Stmt.Block(Arrays.asList(body, new Stmt.Expression(increment)));
     }
-    Stmt whileBlock = new Stmt.While(condition, body);
+    if (condition == null) condition = new Expr.Literal(true);
+    body = new Stmt.While(condition, body);
     if (initializer != null) {
-      whileBlock = new Stmt.Block(Arrays.asList(initializer, whileBlock));
+      body = new Stmt.Block(Arrays.asList(initializer, body));
     }
-    return whileBlock;
+    return body;
   }
 
   private Stmt ifStatement() {

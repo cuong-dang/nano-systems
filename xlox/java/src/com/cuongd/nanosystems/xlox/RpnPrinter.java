@@ -20,7 +20,7 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
   @Override
   public String visitAssignExpr(Expr.Assign expr) {
-    throw new UnsupportedOperationException("Unimplemented method 'visitAssignExpr'");
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -74,7 +74,7 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
   @Override
   public String visitVariableExpr(Variable expr) {
-    throw new UnsupportedOperationException("Unimplemented method 'visitVariableExpr'");
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -94,12 +94,12 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
 
   @Override
   public String visitPrintStmt(Print stmt) {
-    throw new UnsupportedOperationException("Unimplemented method 'visitPrintStmt'");
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public String visitVarStmt(Var stmt) {
-    throw new UnsupportedOperationException("Unimplemented method 'visitVarStmt'");
+    throw new UnsupportedOperationException();
   }
 
   @Override
