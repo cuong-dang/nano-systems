@@ -83,6 +83,11 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   }
 
   @Override
+  public String visitBreakStmt(Stmt.Break stmt) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public String visitExpressionStmt(Expression stmt) {
     return stmt.expression.accept(this);
   }

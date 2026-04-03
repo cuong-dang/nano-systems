@@ -33,6 +33,7 @@ enum TokenType {
 
   // Keywords.
   AND,
+  BREAK,
   CLASS,
   ELSE,
   FALSE,

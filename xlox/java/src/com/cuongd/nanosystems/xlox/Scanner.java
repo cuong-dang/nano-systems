@@ -3,6 +3,7 @@ package com.cuongd.nanosystems.xlox;
 import static com.cuongd.nanosystems.xlox.TokenType.AND;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.BREAK;
 import static com.cuongd.nanosystems.xlox.TokenType.CLASS;
 import static com.cuongd.nanosystems.xlox.TokenType.COLON;
 import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
@@ -59,6 +60,7 @@ class Scanner {
   static {
     keywords = new HashMap<>();
     keywords.put("and", AND);
+    keywords.put("break", BREAK);
     keywords.put("class", CLASS);
     keywords.put("else", ELSE);
     keywords.put("false", FALSE);

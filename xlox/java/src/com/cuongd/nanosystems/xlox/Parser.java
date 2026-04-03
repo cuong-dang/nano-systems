@@ -3,6 +3,7 @@ package com.cuongd.nanosystems.xlox;
 import static com.cuongd.nanosystems.xlox.TokenType.AND;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.BREAK;
 import static com.cuongd.nanosystems.xlox.TokenType.COLON;
 import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
 import static com.cuongd.nanosystems.xlox.TokenType.ELSE;
@@ -82,6 +83,7 @@ class Parser {
 
   private Stmt statement() {
     if (matchAny(LEFT_BRACE)) return block();
+    if (matchAny(BREAK)) return breakStatement();
     if (matchAny(FOR)) return forStatement();
     if (matchAny(IF)) return ifStatement();
     if (matchAny(PRINT)) return printStatement();
@@ -98,6 +100,12 @@ class Parser {
     }
     consume(RIGHT_BRACE, "Expect '}' after block.");
     return new Stmt.Block(statements);
+  }
+
+  private Stmt breakStatement() {
+    Stmt stmt = new Stmt.Break(previous());
+    consume(SEMICOLON, "Expect ';' after break.");
+    return stmt;
   }
 
   private Stmt forStatement() {

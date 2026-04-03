@@ -31,6 +31,7 @@ public class GenerateAst {
         "Stmt",
         Arrays.asList(
             "Block: List<Stmt> statements",
+            "Break: Token breakToken",
             "Expression: Expr expression",
             "If: Expr condition, Stmt thenBranch, Stmt elseBranch",
             "Print: Expr expression",

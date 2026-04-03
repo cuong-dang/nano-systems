@@ -3,10 +3,7 @@ package com.cuongd.nanosystems.xlox;
 import static com.cuongd.nanosystems.xlox.TokenType.OR;
 
 import com.cuongd.nanosystems.xlox.Expr.*;
-import com.cuongd.nanosystems.xlox.Stmt.Block;
-import com.cuongd.nanosystems.xlox.Stmt.Expression;
-import com.cuongd.nanosystems.xlox.Stmt.If;
-import com.cuongd.nanosystems.xlox.Stmt.Print;
+import com.cuongd.nanosystems.xlox.Stmt.*;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
@@ -163,11 +160,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitBreakStmt(Break stmt) {
+    throw new BreakSignal(stmt.breakToken);
+  }
+
+  @Override
   public Object visitIfStmt(If stmt) {
     if (isTruthy(eval(stmt.condition))) {
       execute(stmt.thenBranch);
-    } else if (stmt.thenBranch != null) {
-      execute(stmt.thenBranch);
+    } else if (stmt.elseBranch != null) {
+      execute(stmt.elseBranch);
     }
     return null;
   }
@@ -180,7 +182,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
-  public Object visitVarStmt(Stmt.Var stmt) {
+  public Object visitVarStmt(Var stmt) {
     Object value = uninitialized;
     if (stmt.initializer != null) {
       value = eval(stmt.initializer);
@@ -190,9 +192,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
-  public Object visitWhileStmt(Stmt.While stmt) {
+  public Object visitWhileStmt(While stmt) {
     while (isTruthy((eval(stmt.condition)))) {
-      execute(stmt.body);
+      try {
+        execute(stmt.body);
+      } catch (BreakSignal _) {
+        return null;
+      }
     }
     return null;
   }
@@ -201,6 +207,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     for (Stmt statement : statements) {
       try {
         lastStatementResult = execute(statement);
+      } catch (BreakSignal signal) {
+        XLox.runtimeError(new RuntimeError(signal.token, "Break statement not in a loop."));
       } catch (RuntimeError error) {
         XLox.runtimeError(error);
         return;
