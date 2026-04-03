@@ -48,6 +48,11 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   }
 
   @Override
+  public String visitLogicalExpr(Expr.Logical expr) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public String visitTernaryExpr(Expr.Ternary expr) {
     return expr.cond.accept(this)
         + " "
@@ -73,8 +78,18 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   }
 
   @Override
+  public String visitBlockStmt(Stmt.Block stmt) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public String visitExpressionStmt(Expression stmt) {
     return stmt.expression.accept(this);
+  }
+
+  @Override
+  public String visitIfStmt(Stmt.If stmt) {
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -85,5 +100,10 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   @Override
   public String visitVarStmt(Var stmt) {
     throw new UnsupportedOperationException("Unimplemented method 'visitVarStmt'");
+  }
+
+  @Override
+  public String visitWhileStmt(Stmt.While stmt) {
+    throw new UnsupportedOperationException();
   }
 }

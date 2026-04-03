@@ -1,8 +1,43 @@
 package com.cuongd.nanosystems.xlox;
 
-import static com.cuongd.nanosystems.xlox.TokenType.*;
+import static com.cuongd.nanosystems.xlox.TokenType.AND;
+import static com.cuongd.nanosystems.xlox.TokenType.BANG;
+import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.COLON;
+import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
+import static com.cuongd.nanosystems.xlox.TokenType.ELSE;
+import static com.cuongd.nanosystems.xlox.TokenType.EOF;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.FALSE;
+import static com.cuongd.nanosystems.xlox.TokenType.FOR;
+import static com.cuongd.nanosystems.xlox.TokenType.GREATER;
+import static com.cuongd.nanosystems.xlox.TokenType.GREATER_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.IDENTIFIER;
+import static com.cuongd.nanosystems.xlox.TokenType.IF;
+import static com.cuongd.nanosystems.xlox.TokenType.LEFT_BRACE;
+import static com.cuongd.nanosystems.xlox.TokenType.LEFT_PAREN;
+import static com.cuongd.nanosystems.xlox.TokenType.LESS;
+import static com.cuongd.nanosystems.xlox.TokenType.LESS_EQUAL;
+import static com.cuongd.nanosystems.xlox.TokenType.MINUS;
+import static com.cuongd.nanosystems.xlox.TokenType.NIL;
+import static com.cuongd.nanosystems.xlox.TokenType.NUMBER;
+import static com.cuongd.nanosystems.xlox.TokenType.OR;
+import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
+import static com.cuongd.nanosystems.xlox.TokenType.PRINT;
+import static com.cuongd.nanosystems.xlox.TokenType.QUESTION;
+import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_BRACE;
+import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_PAREN;
+import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
+import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
+import static com.cuongd.nanosystems.xlox.TokenType.STAR;
+import static com.cuongd.nanosystems.xlox.TokenType.STRING;
+import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
+import static com.cuongd.nanosystems.xlox.TokenType.VAR;
+import static com.cuongd.nanosystems.xlox.TokenType.WHILE;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -47,6 +82,7 @@ class Parser {
 
   private Stmt statement() {
     if (matchAny(LEFT_BRACE)) return block();
+    if (matchAny(FOR)) return forStatement();
     if (matchAny(IF)) return ifStatement();
     if (matchAny(PRINT)) return printStatement();
     if (matchAny(WHILE)) return whileStatement();
@@ -62,6 +98,37 @@ class Parser {
     }
     consume(RIGHT_BRACE, "Expect '}' after block.");
     return new Stmt.Block(statements);
+  }
+
+  private Stmt forStatement() {
+    // Parse statement.
+    consume(LEFT_PAREN, "Expect '(' after 'for'.");
+    Stmt initializer = null;
+    if (!matchAny(SEMICOLON)) {
+      initializer = declaration();
+    }
+    Expr condition = null;
+    if (!check(SEMICOLON)) {
+      condition = expression();
+    }
+    consume(SEMICOLON, "Expect ';' after for-loop condition.");
+    Expr increment = null;
+    if (!check(RIGHT_PAREN)) {
+      increment = expression();
+    }
+    consume(RIGHT_PAREN, "Expect ')' after for-loop increment.");
+    Stmt body = statement();
+
+    // Desugar to a while-loop.
+    condition = condition != null ? condition : new Expr.Literal(true);
+    if (increment != null) {
+      body = new Stmt.Block(Arrays.asList(body, new Stmt.Expression(increment)));
+    }
+    Stmt whileBlock = new Stmt.While(condition, body);
+    if (initializer != null) {
+      whileBlock = new Stmt.Block(Arrays.asList(initializer, whileBlock));
+    }
+    return whileBlock;
   }
 
   private Stmt ifStatement() {
