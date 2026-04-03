@@ -161,7 +161,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitBreakStmt(Break stmt) {
-    throw new BreakSignal(stmt.breakToken);
+    throw new BreakSignal();
   }
 
   @Override
@@ -207,8 +207,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     for (Stmt statement : statements) {
       try {
         lastStatementResult = execute(statement);
-      } catch (BreakSignal signal) {
-        XLox.runtimeError(new RuntimeError(signal.token, "Break statement not in a loop."));
       } catch (RuntimeError error) {
         XLox.runtimeError(error);
         return;

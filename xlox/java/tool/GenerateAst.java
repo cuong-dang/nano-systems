@@ -31,7 +31,7 @@ public class GenerateAst {
         "Stmt",
         Arrays.asList(
             "Block: List<Stmt> statements",
-            "Break: Token breakToken",
+            "Break:",
             "Expression: Expr expression",
             "If: Expr condition, Stmt thenBranch, Stmt elseBranch",
             "Print: Expr expression",
@@ -56,7 +56,7 @@ public class GenerateAst {
     // The AST classes.
     for (String type : types) {
       String className = type.split(":")[0].trim();
-      String fields = type.split(":")[1].trim();
+      String fields = type.split(":").length == 1 ? "" : type.split(":")[1].trim();
       defineType(writer, baseName, className, fields);
     }
 
@@ -92,7 +92,7 @@ public class GenerateAst {
 
     // Constructor.
     writer.println("    " + className + "(" + fieldList + ") {");
-    String[] fields = fieldList.split(", ");
+    String[] fields = fieldList.length() == 0 ? new String[0] : fieldList.split(", ");
     for (String field : fields) {
       String name = field.split(" ")[1];
       writer.println("      this." + name + " = " + name + ";");
