@@ -1,14 +1,18 @@
 package com.cuongd.nanosystems.xlox;
 
+import static com.cuongd.nanosystems.xlox.TokenType.OR;
+
 import com.cuongd.nanosystems.xlox.Expr.*;
 import com.cuongd.nanosystems.xlox.Stmt.Block;
 import com.cuongd.nanosystems.xlox.Stmt.Expression;
+import com.cuongd.nanosystems.xlox.Stmt.If;
 import com.cuongd.nanosystems.xlox.Stmt.Print;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   private Environment environment = new Environment();
   private Object lastStatementResult;
+  private static final Object uninitialized = new Object();
 
   @Override
   public Object visitAssignExpr(Assign expr) {
@@ -105,6 +109,17 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitLogicalExpr(Logical expr) {
+    Object left = eval(expr.left);
+    if (expr.operator.type == OR) {
+      if (isTruthy(left)) return left;
+    } else {
+      if (!isTruthy(left)) return left;
+    }
+    return eval(expr.right);
+  }
+
+  @Override
   public Object visitTernaryExpr(Ternary expr) {
     if (isTruthy(eval(expr.cond))) {
       return eval(expr.yes);
@@ -129,7 +144,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitVariableExpr(Variable expr) {
-    return environment.get(expr.name);
+    Object value = environment.get(expr.name);
+    if (value == uninitialized) {
+      throw new RuntimeError(expr.name, "Variable must be initialized before use.");
+    }
+    return value;
   }
 
   @Override
@@ -144,6 +163,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitIfStmt(If stmt) {
+    if (isTruthy(eval(stmt.condition))) {
+      execute(stmt.thenBranch);
+    } else if (stmt.thenBranch != null) {
+      execute(stmt.thenBranch);
+    }
+    return null;
+  }
+
+  @Override
   public Object visitPrintStmt(Print stmt) {
     Object value = eval(stmt.expression);
     System.out.println(stringify(value));
@@ -151,12 +180,20 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
-  public Void visitVarStmt(Stmt.Var stmt) {
-    Object value = null;
+  public Object visitVarStmt(Stmt.Var stmt) {
+    Object value = uninitialized;
     if (stmt.initializer != null) {
       value = eval(stmt.initializer);
     }
     environment.define(stmt.name.lexeme, value);
+    return null;
+  }
+
+  @Override
+  public Object visitWhileStmt(Stmt.While stmt) {
+    while (isTruthy((eval(stmt.condition)))) {
+      execute(stmt.body);
+    }
     return null;
   }
 
