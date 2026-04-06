@@ -4,9 +4,11 @@ import java.util.List;
 
 class XLoxFunction implements XLoxCallable {
   private final Stmt.Function declaration;
+  private final Environment closure;
 
-  XLoxFunction(Stmt.Function declaration) {
+  XLoxFunction(Stmt.Function declaration, Environment closure) {
     this.declaration = declaration;
+    this.closure = closure;
   }
 
   @Override
@@ -16,7 +18,7 @@ class XLoxFunction implements XLoxCallable {
 
   @Override
   public Object call(Interpreter interpreter, List<Object> arguments) {
-    Environment environment = new Environment(interpreter.globals);
+    Environment environment = new Environment(closure);
     for (int i = 0; i < declaration.params.size(); i++) {
       environment.define(declaration.params.get(i).lexeme, arguments.get(i));
     }

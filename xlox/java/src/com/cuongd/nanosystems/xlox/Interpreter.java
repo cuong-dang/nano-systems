@@ -201,7 +201,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitFunctionStmt(Function stmt) {
-    XLoxFunction function = new XLoxFunction(stmt);
+    XLoxFunction function = new XLoxFunction(stmt, environment);
     environment.define(stmt.name.lexeme, function);
     return null;
   }
