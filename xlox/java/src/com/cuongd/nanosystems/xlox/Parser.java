@@ -12,6 +12,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.EQUAL_EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.FALSE;
 import static com.cuongd.nanosystems.xlox.TokenType.FOR;
+import static com.cuongd.nanosystems.xlox.TokenType.FUN;
 import static com.cuongd.nanosystems.xlox.TokenType.GREATER;
 import static com.cuongd.nanosystems.xlox.TokenType.GREATER_EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.IDENTIFIER;
@@ -56,14 +57,15 @@ class Parser {
   List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
     while (!isAtEnd()) {
-      statements.add(declarationOrStatement());
+      statements.add(declaration());
     }
     return statements;
   }
 
-  private Stmt declarationOrStatement() {
+  private Stmt declaration() {
     try {
       if (matchAny(VAR)) return varDeclaration();
+      if (matchAny(FUN)) return function("function");
 
       return statement();
     } catch (ParseError error) {
@@ -83,7 +85,7 @@ class Parser {
   }
 
   private Stmt statement() {
-    if (matchAny(LEFT_BRACE)) return block();
+    if (matchAny(LEFT_BRACE)) return new Stmt.Block(block());
     if (matchAny(BREAK)) return breakStatement();
     if (matchAny(FOR)) return forStatement();
     if (matchAny(IF)) return ifStatement();
@@ -93,14 +95,14 @@ class Parser {
     return expressionStatement();
   }
 
-  private Stmt block() {
+  private List<Stmt> block() {
     List<Stmt> statements = new ArrayList<>();
 
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
-      statements.add(declarationOrStatement());
+      statements.add(declaration());
     }
     consume(RIGHT_BRACE, "Expect '}' after block.");
-    return new Stmt.Block(statements);
+    return statements;
   }
 
   private Stmt breakStatement() {
@@ -184,6 +186,25 @@ class Parser {
     Expr expr = expression();
     consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Expression(expr);
+  }
+
+  private Stmt.Function function(String kind) {
+    Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+    consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+    List<Token> parameters = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do {
+        if (parameters.size() >= 255) {
+          error(peek(), "Can't have more than 255 parameters.");
+        }
+
+        parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+      } while (matchAny(COMMA));
+    }
+    consume(RIGHT_PAREN, "Expect ')' after parameters.");
+    consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+    List<Stmt> body = block();
+    return new Stmt.Function(name, parameters, body);
   }
 
   private Expr expression() {
@@ -271,7 +292,38 @@ class Parser {
     if (matchAny(BANG, MINUS)) {
       return new Expr.Unary(previous(), unary());
     }
-    return primary();
+
+    return call();
+  }
+
+  private Expr call() {
+    Expr expr = primary();
+
+    while (true) {
+      if (matchAny(LEFT_PAREN)) {
+        expr = finishCall(expr);
+      } else {
+        break;
+      }
+    }
+
+    return expr;
+  }
+
+  private Expr finishCall(Expr callee) {
+    List<Expr> arguments = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do {
+        if (arguments.size() >= 255) {
+          error(peek(), "Can't have more than 255 arguments.");
+        }
+        arguments.add(expression());
+      } while (matchAny(COMMA));
+    }
+
+    Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");
+
+    return new Expr.Call(callee, paren, arguments);
   }
 
   private Expr primary() {

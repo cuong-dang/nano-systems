@@ -4,12 +4,35 @@ import static com.cuongd.nanosystems.xlox.TokenType.OR;
 
 import com.cuongd.nanosystems.xlox.Expr.*;
 import com.cuongd.nanosystems.xlox.Stmt.*;
+import java.util.ArrayList;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
-  private Environment environment = new Environment();
+  final Environment globals = new Environment();
+  private Environment environment = globals;
   private Object lastStatementResult;
   private static final Object uninitialized = new Object();
+
+  Interpreter() {
+    globals.define(
+        "clock",
+        new XLoxCallable() {
+          @Override
+          public int arity() {
+            return 0;
+          }
+
+          @Override
+          public Object call(Interpreter interpreter, List<Object> arguments) {
+            return System.currentTimeMillis() / 1000.0;
+          }
+
+          @Override
+          public String toString() {
+            return "<native fn>";
+          }
+        });
+  }
 
   @Override
   public Object visitAssignExpr(Assign expr) {
@@ -86,6 +109,29 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitCallExpr(Call expr) {
+    Object callee = eval(expr.callee);
+
+    if (!(callee instanceof XLoxCallable)) {
+      throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+    }
+
+    List<Object> arguments = new ArrayList<>();
+    for (Expr argument : expr.arguments) {
+      arguments.add(eval(argument));
+    }
+
+    XLoxCallable function = (XLoxCallable) callee;
+    if (arguments.size() != function.arity()) {
+      throw new RuntimeError(
+          expr.paren,
+          "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
+    }
+
+    return function.call(this, arguments);
+  }
+
+  @Override
   public Object visitCommaExpr(Comma expr) {
     Object result = null;
     ;
@@ -151,6 +197,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   @Override
   public Object visitExpressionStmt(Expression stmt) {
     return eval(stmt.expression);
+  }
+
+  @Override
+  public Object visitFunctionStmt(Function stmt) {
+    XLoxFunction function = new XLoxFunction(stmt);
+    environment.define(stmt.name.lexeme, function);
+    return null;
   }
 
   @Override
@@ -226,7 +279,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     return statement.accept(this);
   }
 
-  private void executeBlock(List<Stmt> statements, Environment environment) {
+  void executeBlock(List<Stmt> statements, Environment environment) {
     Environment previous = this.environment;
     try {
       this.environment = environment;
