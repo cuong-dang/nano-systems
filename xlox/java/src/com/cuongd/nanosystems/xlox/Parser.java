@@ -28,6 +28,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.OR;
 import static com.cuongd.nanosystems.xlox.TokenType.PLUS;
 import static com.cuongd.nanosystems.xlox.TokenType.PRINT;
 import static com.cuongd.nanosystems.xlox.TokenType.QUESTION;
+import static com.cuongd.nanosystems.xlox.TokenType.RETURN;
 import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_BRACE;
 import static com.cuongd.nanosystems.xlox.TokenType.RIGHT_PAREN;
 import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
@@ -90,6 +91,7 @@ class Parser {
     if (matchAny(FOR)) return forStatement();
     if (matchAny(IF)) return ifStatement();
     if (matchAny(PRINT)) return printStatement();
+    if (matchAny(RETURN)) return returnStatement();
     if (matchAny(WHILE)) return whileStatement();
 
     return expressionStatement();
@@ -167,6 +169,16 @@ class Parser {
     Expr expr = expression();
     consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Print(expr);
+  }
+
+  private Stmt returnStatement() {
+    Token keyword = previous();
+    Expr value = null;
+    if (!check(SEMICOLON)) {
+      value = expression();
+    }
+    consume(SEMICOLON, "Expect ';' after return value.");
+    return new Stmt.Return(keyword, value);
   }
 
   private Stmt whileStatement() {
