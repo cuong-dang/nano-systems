@@ -134,7 +134,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   @Override
   public Object visitCommaExpr(Comma expr) {
     Object result = null;
-    ;
+
     for (Expr e : expr.exprs) {
       result = eval(e);
     }
@@ -144,6 +144,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   @Override
   public Object visitGroupingExpr(Grouping expr) {
     return eval(expr.expression);
+  }
+
+  @Override
+  public Object visitLambdaExpr(Lambda expr) {
+    XLoxFunction lambda =
+        new XLoxFunction(new Function(expr.name, expr.params, expr.body), environment);
+    return lambda;
   }
 
   @Override

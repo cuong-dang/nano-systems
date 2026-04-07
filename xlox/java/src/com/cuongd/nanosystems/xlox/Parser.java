@@ -42,6 +42,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.WHILE;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 class Parser {
@@ -66,7 +67,11 @@ class Parser {
   private Stmt declaration() {
     try {
       if (matchAny(VAR)) return varDeclaration();
-      if (matchAny(FUN)) return function("function");
+      if (matchAny(FUN)) {
+        if (check(IDENTIFIER)) return function("function");
+        if (check(LEFT_PAREN)) return expressionStatement(this::lambda);
+        throw error(peek(), "Expect function declaration or lambda expression.");
+      }
 
       return statement();
     } catch (ParseError error) {
@@ -195,7 +200,11 @@ class Parser {
   }
 
   private Stmt expressionStatement() {
-    Expr expr = expression();
+    return expressionStatement(this::expression);
+  }
+
+  private Stmt expressionStatement(Supplier<Expr> exprSupplier) {
+    Expr expr = exprSupplier.get();
     consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Expression(expr);
   }
@@ -220,11 +229,19 @@ class Parser {
   }
 
   private Expr expression() {
-    return ternary();
+    return comma();
+  }
+
+  private Expr comma() {
+    List<Expr> exprs = new ArrayList<>();
+    do {
+      exprs.add(ternary());
+    } while (matchAny(COMMA));
+    return exprs.size() == 1 ? exprs.get(0) : new Expr.Comma(exprs);
   }
 
   private Expr ternary() {
-    Expr expr = comma();
+    Expr expr = assignment();
     if (matchAny(QUESTION)) {
       Expr yes = ternary();
       consume(COLON, "Expect ':' in ternary expression.");
@@ -232,14 +249,6 @@ class Parser {
       return new Expr.Ternary(expr, yes, no);
     }
     return expr;
-  }
-
-  private Expr comma() {
-    List<Expr> exprs = new ArrayList<>();
-    do {
-      exprs.add(assignment());
-    } while (matchAny(COMMA));
-    return exprs.size() == 1 ? exprs.get(0) : new Expr.Comma(exprs);
   }
 
   private Expr assignment() {
@@ -277,7 +286,7 @@ class Parser {
 
     while (matchAny(AND)) {
       Token operator = previous();
-      Expr right = and();
+      Expr right = equality();
       expr = new Expr.Logical(expr, operator, right);
     }
 
@@ -329,7 +338,7 @@ class Parser {
         if (arguments.size() >= 255) {
           error(peek(), "Can't have more than 255 arguments.");
         }
-        arguments.add(expression());
+        arguments.add(ternary());
       } while (matchAny(COMMA));
     }
 
@@ -339,6 +348,7 @@ class Parser {
   }
 
   private Expr primary() {
+    if (matchAny(FUN)) return lambda();
     if (matchAny(FALSE)) return new Expr.Literal(false);
     if (matchAny(TRUE)) return new Expr.Literal(true);
     if (matchAny(NIL)) return new Expr.Literal(null);
@@ -354,6 +364,25 @@ class Parser {
     }
 
     throw error(peek(), "Expect expression.");
+  }
+
+  private Expr lambda() {
+    Token name = new Token(IDENTIFIER, "lambda$" + UUID.randomUUID(), null, previous().line);
+    consume(LEFT_PAREN, "Expect '(' after lambda.");
+    List<Token> parameters = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do {
+        if (parameters.size() >= 255) {
+          error(peek(), "Can't have more than 255 parameters.");
+        }
+
+        parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+      } while (matchAny(COMMA));
+    }
+    consume(RIGHT_PAREN, "Expect ')' after parameters.");
+    consume(LEFT_BRACE, "Expect '{' before lambda body.");
+    List<Stmt> body = block();
+    return new Expr.Lambda(name, parameters, body);
   }
 
   private Expr binaryHelper(Supplier<Expr> next, TokenType... types) {
