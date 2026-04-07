@@ -29,6 +29,11 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   }
 
   @Override
+  public String visitCallExpr(Expr.Call expr) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public String visitCommaExpr(Comma expr) {
     StringBuilder sb = new StringBuilder();
     for (Expr e : expr.exprs) {
@@ -40,6 +45,11 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   @Override
   public String visitGroupingExpr(Expr.Grouping expr) {
     return expr.expression.accept(this);
+  }
+
+  @Override
+  public String visitLambdaExpr(Expr.Lambda expr) {
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -93,12 +103,22 @@ class RpnPrinter implements Expr.Visitor<String>, Stmt.Visitor<String> {
   }
 
   @Override
+  public String visitFunctionStmt(Stmt.Function stmt) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public String visitIfStmt(Stmt.If stmt) {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public String visitPrintStmt(Print stmt) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public String visitReturnStmt(Stmt.Return stmt) {
     throw new UnsupportedOperationException();
   }
 
