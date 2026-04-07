@@ -13,18 +13,18 @@ class XLoxFunction implements XLoxCallable {
 
   @Override
   public int arity() {
-    return declaration.params.size();
+    return declaration.lambda.params.size();
   }
 
   @Override
   public Object call(Interpreter interpreter, List<Object> arguments) {
     Environment environment = new Environment(closure);
-    for (int i = 0; i < declaration.params.size(); i++) {
-      environment.define(declaration.params.get(i).lexeme, arguments.get(i));
+    for (int i = 0; i < declaration.lambda.params.size(); i++) {
+      environment.define(declaration.lambda.params.get(i).lexeme, arguments.get(i));
     }
 
     try {
-      interpreter.executeBlock(declaration.body, environment);
+      interpreter.executeBlock(declaration.lambda.body, environment);
     } catch (Return r) {
       return r.value;
     }
@@ -33,6 +33,6 @@ class XLoxFunction implements XLoxCallable {
 
   @Override
   public String toString() {
-    return "<fn " + declaration.name.lexeme + ">";
+    return declaration.name == null ? "<lambda>" : "<fn " + declaration.name.lexeme + ">";
   }
 }

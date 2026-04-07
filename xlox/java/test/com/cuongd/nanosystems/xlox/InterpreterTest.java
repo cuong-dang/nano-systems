@@ -41,6 +41,17 @@ a()
     }
 
     @Test
+    public void noopAnonymousFunction() {
+      String script =
+"""
+fun () {};
+1
+""";
+      assertEquals(1.0, run(script));
+    }
+
+
+    @Test
     public void commaExpressionInFunctionCall() {
       String script =
 """

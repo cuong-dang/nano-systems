@@ -42,7 +42,6 @@ import static com.cuongd.nanosystems.xlox.TokenType.WHILE;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 class Parser {
@@ -67,10 +66,9 @@ class Parser {
   private Stmt declaration() {
     try {
       if (matchAny(VAR)) return varDeclaration();
-      if (matchAny(FUN)) {
-        if (check(IDENTIFIER)) return function("function");
-        if (check(LEFT_PAREN)) return expressionStatement(this::lambda);
-        throw error(peek(), "Expect function declaration or lambda expression.");
+      if (check(FUN) && checkNext(IDENTIFIER)) {
+        consume(FUN, null);
+        return function("function");
       }
 
       return statement();
@@ -200,32 +198,14 @@ class Parser {
   }
 
   private Stmt expressionStatement() {
-    return expressionStatement(this::expression);
-  }
-
-  private Stmt expressionStatement(Supplier<Expr> exprSupplier) {
-    Expr expr = exprSupplier.get();
+    Expr expr = expression();
     consume(SEMICOLON, "Expect ';' after statement.");
     return new Stmt.Expression(expr);
   }
 
   private Stmt.Function function(String kind) {
     Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
-    consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
-    List<Token> parameters = new ArrayList<>();
-    if (!check(RIGHT_PAREN)) {
-      do {
-        if (parameters.size() >= 255) {
-          error(peek(), "Can't have more than 255 parameters.");
-        }
-
-        parameters.add(consume(IDENTIFIER, "Expect parameter name."));
-      } while (matchAny(COMMA));
-    }
-    consume(RIGHT_PAREN, "Expect ')' after parameters.");
-    consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
-    List<Stmt> body = block();
-    return new Stmt.Function(name, parameters, body);
+    return new Stmt.Function(name, lambda());
   }
 
   private Expr expression() {
@@ -366,8 +346,7 @@ class Parser {
     throw error(peek(), "Expect expression.");
   }
 
-  private Expr lambda() {
-    Token name = new Token(IDENTIFIER, "lambda$" + UUID.randomUUID(), null, previous().line);
+  private Expr.Lambda lambda() {
     consume(LEFT_PAREN, "Expect '(' after lambda.");
     List<Token> parameters = new ArrayList<>();
     if (!check(RIGHT_PAREN)) {
@@ -382,7 +361,7 @@ class Parser {
     consume(RIGHT_PAREN, "Expect ')' after parameters.");
     consume(LEFT_BRACE, "Expect '{' before lambda body.");
     List<Stmt> body = block();
-    return new Expr.Lambda(name, parameters, body);
+    return new Expr.Lambda(parameters, body);
   }
 
   private Expr binaryHelper(Supplier<Expr> next, TokenType... types) {
@@ -433,6 +412,11 @@ class Parser {
   private boolean check(TokenType type) {
     if (isAtEnd()) return false;
     return peek().type == type;
+  }
+
+  private boolean checkNext(TokenType type) {
+    if (isAtEnd()) return false;
+    return tokens.get(current + 1).type == type;
   }
 
   // TODO: Revisit this error processing and handling.

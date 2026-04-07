@@ -148,9 +148,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitLambdaExpr(Lambda expr) {
-    XLoxFunction lambda =
-        new XLoxFunction(new Function(expr.name, expr.params, expr.body), environment);
-    return lambda;
+    return new XLoxFunction(new Function(null, expr), environment);
   }
 
   @Override
