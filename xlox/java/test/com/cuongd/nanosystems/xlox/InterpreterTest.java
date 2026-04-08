@@ -50,6 +50,20 @@ fun () {};
       assertEquals(1.0, run(script));
     }
 
+    @Test
+    public void closureLexicalScoping() {
+      String script =
+"""
+var a = "global";
+fun showA() {
+  return a;
+}
+
+a = "block";
+showA();
+""";
+      assertEquals("global", run(script));
+    }
 
     @Test
     public void commaExpressionInFunctionCall() {
