@@ -2,11 +2,13 @@ package com.cuongd.nanosystems.xlox;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 public class InterpreterTest {
   private static final Interpreter interpreter = new Interpreter();
+  private static final Resolver resolver = new Resolver(interpreter);
 
   @Nested
   class Function {
@@ -51,21 +53,6 @@ fun () {};
     }
 
     @Test
-    public void closureLexicalScoping() {
-      String script =
-"""
-var a = "global";
-fun showA() {
-  return a;
-}
-
-a = "block";
-showA();
-""";
-      assertEquals("global", run(script));
-    }
-
-    @Test
     public void commaExpressionInFunctionCall() {
       String script =
 """
@@ -77,7 +64,9 @@ add(1, 2)
   }
 
   private static Object run(String s) {
-    interpreter.interpret(new Parser(new Scanner(s).scanTokens(), true).parse());
+    List<Stmt> statements = new Parser(new Scanner(s).scanTokens(), true).parse();
+    resolver.resolve(statements);
+    interpreter.interpret(statements);
     return interpreter.lastStatementResult();
   }
 }

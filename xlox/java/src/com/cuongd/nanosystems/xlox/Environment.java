@@ -25,11 +25,28 @@ class Environment {
     else notDefinedError(name);
   }
 
+  void assignAt(int distance, Token name, Object value) {
+    ancestor(distance).values.put(name.lexeme, value);
+  }
+
   Object get(Token name) {
     if (isDefinedHere(name)) return values.get(name.lexeme);
     if (enclosing != null) return enclosing.get(name);
     notDefinedError(name);
     throw new AssertionError(); // Unreachable.
+  }
+
+  Object getAt(int distance, String name) {
+    return ancestor(distance).values.get(name);
+  }
+
+  Environment ancestor(int distance) {
+    Environment environment = this;
+    for (int i = 0; i < distance; i++) {
+      environment = environment.enclosing;
+    }
+
+    return environment;
   }
 
   private void notDefinedError(Token name) {

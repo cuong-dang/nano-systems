@@ -53,6 +53,10 @@ public class XLox {
     List<Stmt> statements = new Parser(tokens, replMode).parse();
     if (hadError) return; // Parser error.
 
+    Resolver resolver = new Resolver(interpreter);
+    resolver.resolve(statements);
+    if (hadError) return; // Resolver error.
+
     interpreter.interpret(statements);
     if (hadRuntimeError) return; // Runtime error.
 
