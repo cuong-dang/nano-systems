@@ -11,8 +11,14 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     FUNCTION,
   }
 
+  private enum VariableState {
+    DECLARED,
+    DEFINED,
+    READ,
+  }
+
   private final Interpreter interpreter;
-  private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+  private final Stack<Map<Token, VariableState>> scopes = new Stack<>();
   private FunctionType currentFunction = FunctionType.NONE;
 
   Resolver(Interpreter interpreter) {
@@ -22,7 +28,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override
   public Void visitAssignExpr(Expr.Assign expr) {
     resolve(expr.value);
-    resolveLocal(expr, expr.name);
+    resolveLocal(expr, expr.name, false);
     return null;
   }
 
@@ -86,11 +92,11 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitVariableExpr(Expr.Variable expr) {
-    if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
+    if (!scopes.isEmpty() && scopes.peek().get(expr.name) == VariableState.DECLARED) {
       XLox.error(expr.name, "Can't read local variable in its own initializer.");
     }
 
-    resolveLocal(expr, expr.name);
+    resolveLocal(expr, expr.name, true);
     return null;
   }
 
@@ -182,28 +188,34 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void endScope() {
+    for (Token name : scopes.peek().keySet()) {
+      if (!(scopes.peek().get(name) == VariableState.READ)) {
+        XLox.error(name, "Local variable declared but not read.");
+      }
+    }
     scopes.pop();
   }
 
   private void declare(Token name) {
     if (scopes.isEmpty()) return;
 
-    Map<String, Boolean> scope = scopes.peek();
-    if (scope.containsKey(name.lexeme)) {
+    Map<Token, VariableState> scope = scopes.peek();
+    if (scope.containsKey(name)) {
       XLox.error(name, "Already a variable with this name in this scope.");
     }
-    scope.put(name.lexeme, false);
+    scope.put(name, VariableState.DECLARED);
   }
 
   private void define(Token name) {
     if (scopes.isEmpty()) return;
-    scopes.peek().put(name.lexeme, true);
+    scopes.peek().put(name, VariableState.DEFINED);
   }
 
-  private void resolveLocal(Expr expr, Token name) {
+  private void resolveLocal(Expr expr, Token name, boolean markRead) {
     for (int i = scopes.size() - 1; i >= 0; i--) {
-      if (scopes.get(i).containsKey(name.lexeme)) {
+      if (scopes.get(i).containsKey(name)) {
         interpreter.resolve(expr, scopes.size() - 1 - i);
+        if (markRead) scopes.get(i).put(name, VariableState.READ);
         return;
       }
     }
