@@ -4,8 +4,10 @@ import static com.cuongd.nanosystems.xlox.TokenType.AND;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG;
 import static com.cuongd.nanosystems.xlox.TokenType.BANG_EQUAL;
 import static com.cuongd.nanosystems.xlox.TokenType.BREAK;
+import static com.cuongd.nanosystems.xlox.TokenType.CLASS;
 import static com.cuongd.nanosystems.xlox.TokenType.COLON;
 import static com.cuongd.nanosystems.xlox.TokenType.COMMA;
+import static com.cuongd.nanosystems.xlox.TokenType.DOT;
 import static com.cuongd.nanosystems.xlox.TokenType.ELSE;
 import static com.cuongd.nanosystems.xlox.TokenType.EOF;
 import static com.cuongd.nanosystems.xlox.TokenType.EQUAL;
@@ -65,17 +67,32 @@ class Parser {
 
   private Stmt declaration() {
     try {
-      if (matchAny(VAR)) return varDeclaration();
+      if (matchAny(CLASS)) return classDeclaration();
       if (check(FUN) && checkNext(IDENTIFIER)) {
         consume(FUN, null);
         return function("function");
       }
+      if (matchAny(VAR)) return varDeclaration();
 
       return statement();
     } catch (ParseError error) {
       synchronize();
       return null;
     }
+  }
+
+  private Stmt classDeclaration() {
+    Token name = consume(IDENTIFIER, "Expect class name.");
+    consume(LEFT_BRACE, "Expect '{' before class body.");
+
+    List<Stmt.Function> methods = new ArrayList<>();
+    while (!check(RIGHT_BRACE) && !isAtEnd()) {
+      methods.add(function("method"));
+    }
+
+    consume(RIGHT_BRACE, "Expect '}' after class body.");
+
+    return new Stmt.Class(name, methods);
   }
 
   private Stmt varDeclaration() {
@@ -241,6 +258,9 @@ class Parser {
       if (expr instanceof Expr.Variable) {
         Token name = ((Expr.Variable) expr).name;
         return new Expr.Assign(name, value);
+      } else if (expr instanceof Expr.Get) {
+        Expr.Get get = (Expr.Get) expr;
+        return new Expr.Set(get.object, get.name, value);
       }
 
       error(equals, "Invalid assignment target.");
@@ -303,6 +323,9 @@ class Parser {
     while (true) {
       if (matchAny(LEFT_PAREN)) {
         expr = finishCall(expr);
+      } else if (matchAny(DOT)) {
+        Token name = consume(IDENTIFIER, "Expect property name after '.'.");
+        expr = new Expr.Get(expr, name);
       } else {
         break;
       }

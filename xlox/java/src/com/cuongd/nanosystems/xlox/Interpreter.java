@@ -151,6 +151,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitGetExpr(Get expr) {
+    Object object = eval(expr.object);
+    if (object instanceof XLoxInstance) {
+      return ((XLoxInstance) object).get(expr.name);
+    }
+
+    throw new RuntimeError(expr.name, "Only instances have properties.");
+  }
+
+  @Override
   public Object visitGroupingExpr(Grouping expr) {
     return eval(expr.expression);
   }
@@ -174,6 +184,19 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
       if (!isTruthy(left)) return left;
     }
     return eval(expr.right);
+  }
+
+  @Override
+  public Object visitSetExpr(Set expr) {
+    Object object = eval(expr.object);
+
+    if (!(object instanceof XLoxInstance)) {
+      throw new RuntimeError(expr.name, "Only instances have fields.");
+    }
+
+    Object value = eval(expr.value);
+    ((XLoxInstance) object).set(expr.name, value);
+    return value;
   }
 
   @Override
@@ -229,6 +252,21 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   @Override
   public Object visitBreakStmt(Break stmt) {
     throw new BreakSignal();
+  }
+
+  @Override
+  public Object visitClassStmt(Stmt.Class stmt) {
+    environment.define(stmt.name.lexeme, null);
+
+    Map<String, XLoxFunction> methods = new HashMap<>();
+    for (Stmt.Function method : stmt.methods) {
+      XLoxFunction function = new XLoxFunction(method, environment);
+      methods.put(method.name.lexeme, function);
+    }
+
+    XLoxClass klass = new XLoxClass(stmt.name.lexeme, methods);
+    environment.assign(stmt.name, klass);
+    return null;
   }
 
   @Override
