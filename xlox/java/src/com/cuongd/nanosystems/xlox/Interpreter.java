@@ -208,6 +208,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitThisExpr(This expr) {
+    return lookUpVariable(expr.keyword, expr);
+  }
+
+  @Override
   public Object visitUnaryExpr(Unary expr) {
     Object right = eval(expr.right);
 

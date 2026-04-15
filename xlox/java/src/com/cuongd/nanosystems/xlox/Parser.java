@@ -37,6 +37,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
 import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
 import static com.cuongd.nanosystems.xlox.TokenType.STAR;
 import static com.cuongd.nanosystems.xlox.TokenType.STRING;
+import static com.cuongd.nanosystems.xlox.TokenType.THIS;
 import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
 import static com.cuongd.nanosystems.xlox.TokenType.VAR;
 import static com.cuongd.nanosystems.xlox.TokenType.WHILE;
@@ -355,6 +356,7 @@ class Parser {
     if (matchAny(FALSE)) return new Expr.Literal(false);
     if (matchAny(TRUE)) return new Expr.Literal(true);
     if (matchAny(NIL)) return new Expr.Literal(null);
+    if (matchAny(THIS)) return new Expr.This(previous());
 
     if (matchAny(NUMBER, STRING)) return new Expr.Literal(previous().literal);
 

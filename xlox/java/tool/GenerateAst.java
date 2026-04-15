@@ -28,6 +28,7 @@ public class GenerateAst {
             "Logical: Expr left, Token operator, Expr right",
             "Set: Expr object, Token name, Expr value",
             "Ternary: Expr cond, Expr yes, Expr no",
+            "This: Token keyword",
             "Unary: Token operator, Expr right",
             "Variable: Token name"));
     defineAst(

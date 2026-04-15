@@ -11,6 +11,12 @@ class XLoxFunction implements XLoxCallable {
     this.closure = closure;
   }
 
+  XLoxFunction bind(XLoxInstance instance) {
+    Environment environment = new Environment(closure);
+    environment.define("this", instance);
+    return new XLoxFunction(declaration, environment);
+  }
+
   @Override
   public int arity() {
     return declaration.lambda.params.size();

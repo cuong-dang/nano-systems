@@ -18,8 +18,18 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     READ,
   }
 
+  private static class VariableTokenState {
+    final Token name;
+    final VariableState state;
+
+    VariableTokenState(Token name, VariableState state) {
+      this.name = name;
+      this.state = state;
+    }
+  }
+
   private final Interpreter interpreter;
-  private final Stack<Map<Token, VariableState>> scopes = new Stack<>();
+  private final Stack<Map<String, VariableTokenState>> scopes = new Stack<>();
   private FunctionType currentFunction = FunctionType.NONE;
 
   Resolver(Interpreter interpreter) {
@@ -99,6 +109,12 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override
+  public Void visitThisExpr(Expr.This expr) {
+    resolveLocal(expr, expr.keyword, true);
+    return null;
+  }
+
+  @Override
   public Void visitUnaryExpr(Expr.Unary expr) {
     resolve(expr.right);
     return null;
@@ -106,7 +122,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitVariableExpr(Expr.Variable expr) {
-    if (!scopes.isEmpty() && scopes.peek().get(expr.name) == VariableState.DECLARED) {
+    if (!scopes.isEmpty()
+        && scopes.peek().get(expr.name.lexeme) != null
+        && scopes.peek().get(expr.name.lexeme).state == VariableState.DECLARED) {
       XLox.error(expr.name, "Can't read local variable in its own initializer.");
     }
 
@@ -132,10 +150,15 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     declare(stmt.name);
     define(stmt.name);
 
+    beginScope();
+    scopes.peek().put("this", new VariableTokenState(null, VariableState.READ));
+
     for (Stmt.Function method : stmt.methods) {
       FunctionType declaration = FunctionType.METHOD;
       resolveLambda(method.lambda, declaration);
     }
+
+    endScope();
 
     return null;
   }
@@ -215,9 +238,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void endScope() {
-    for (Token name : scopes.peek().keySet()) {
-      if (!(scopes.peek().get(name) == VariableState.READ)) {
-        XLox.error(name, "Local variable declared but not read.");
+    for (VariableTokenState ts : scopes.peek().values()) {
+      if (!(ts.state == VariableState.READ)) {
+        XLox.error(ts.name, "Local variable declared but not read.");
       }
     }
     scopes.pop();
@@ -226,23 +249,24 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void declare(Token name) {
     if (scopes.isEmpty()) return;
 
-    Map<Token, VariableState> scope = scopes.peek();
-    if (scope.containsKey(name)) {
+    Map<String, VariableTokenState> scope = scopes.peek();
+    if (scope.containsKey(name.lexeme)) {
       XLox.error(name, "Already a variable with this name in this scope.");
     }
-    scope.put(name, VariableState.DECLARED);
+    scope.put(name.lexeme, new VariableTokenState(name, VariableState.DECLARED));
   }
 
   private void define(Token name) {
     if (scopes.isEmpty()) return;
-    scopes.peek().put(name, VariableState.DEFINED);
+    scopes.peek().put(name.lexeme, new VariableTokenState(name, VariableState.DEFINED));
   }
 
   private void resolveLocal(Expr expr, Token name, boolean markRead) {
     for (int i = scopes.size() - 1; i >= 0; i--) {
-      if (scopes.get(i).containsKey(name)) {
+      if (scopes.get(i).containsKey(name.lexeme)) {
         interpreter.resolve(expr, scopes.size() - 1 - i);
-        if (markRead) scopes.get(i).put(name, VariableState.READ);
+        if (markRead)
+          scopes.get(i).put(name.lexeme, new VariableTokenState(name, VariableState.READ));
         return;
       }
     }
