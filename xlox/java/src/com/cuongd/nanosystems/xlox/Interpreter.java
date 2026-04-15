@@ -167,7 +167,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitLambdaExpr(Lambda expr) {
-    return new XLoxFunction(new Function(null, expr), environment);
+    return new XLoxFunction(new Function(null, expr), environment, false);
   }
 
   @Override
@@ -243,7 +243,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitFunctionStmt(Function stmt) {
-    XLoxFunction function = new XLoxFunction(stmt, environment);
+    XLoxFunction function = new XLoxFunction(stmt, environment, false);
     environment.define(stmt.name.lexeme, function);
     return null;
   }
@@ -265,7 +265,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     Map<String, XLoxFunction> methods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
-      XLoxFunction function = new XLoxFunction(method, environment);
+      XLoxFunction function = new XLoxFunction(method, environment, method.name.lexeme.equals("init"));
       methods.put(method.name.lexeme, function);
     }
 

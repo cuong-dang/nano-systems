@@ -5,16 +5,18 @@ import java.util.List;
 class XLoxFunction implements XLoxCallable {
   private final Stmt.Function declaration;
   private final Environment closure;
+  private final boolean isInitializer;
 
-  XLoxFunction(Stmt.Function declaration, Environment closure) {
+  XLoxFunction(Stmt.Function declaration, Environment closure, boolean isInitializer) {
     this.declaration = declaration;
     this.closure = closure;
+    this.isInitializer = isInitializer;
   }
 
   XLoxFunction bind(XLoxInstance instance) {
     Environment environment = new Environment(closure);
     environment.define("this", instance);
-    return new XLoxFunction(declaration, environment);
+    return new XLoxFunction(declaration, environment, isInitializer);
   }
 
   @Override
@@ -32,8 +34,11 @@ class XLoxFunction implements XLoxCallable {
     try {
       interpreter.executeBlock(declaration.lambda.body, environment);
     } catch (Return r) {
+      if (isInitializer) return closure.getAt(0, "this");
       return r.value;
     }
+
+    if (isInitializer) return closure.getAt(0, "this");
     return null;
   }
 
