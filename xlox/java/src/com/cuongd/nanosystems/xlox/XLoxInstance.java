@@ -4,12 +4,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 class XLoxInstance {
-  private XLoxClass klass;
-  private final Map<String, Object> fields = new HashMap<>();
+  protected XLoxClass klass;
+  protected final Map<String, Object> fields = new HashMap<>();
 
   XLoxInstance(XLoxClass klass) {
     this.klass = klass;
   }
+
+  XLoxInstance() {} // For meta-classes.
 
   Object get(Token name) {
     if (fields.containsKey(name.lexeme)) {

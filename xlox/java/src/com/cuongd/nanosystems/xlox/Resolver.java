@@ -11,6 +11,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     FUNCTION,
     INITIALIZER,
     METHOD,
+    CLASS_METHOD,
   }
 
   private enum ClassType {
@@ -122,6 +123,10 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       XLox.error(expr.keyword, "Can't use 'this' outside of a class.");
       return null;
     }
+    if (currentFunction == FunctionType.CLASS_METHOD) {
+      XLox.error(expr.keyword, "Can't use 'this' in class methods.");
+      return null;
+    }
     resolveLocal(expr, expr.keyword, true);
     return null;
   }
@@ -172,6 +177,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       FunctionType declaration = FunctionType.METHOD;
       if (method.name.lexeme.equals("init")) {
         declaration = FunctionType.INITIALIZER;
+      } else if (method.kind.equals("class")) {
+        declaration = FunctionType.CLASS_METHOD;
       }
       resolveLambda(method.lambda, declaration);
     }
@@ -222,7 +229,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         XLox.error(stmt.keyword, "Can't return a value from an initializer.");
       }
       resolve(stmt.value);
-    };
+    }
     return null;
   }
 

@@ -88,7 +88,11 @@ class Parser {
 
     List<Stmt.Function> methods = new ArrayList<>();
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
-      methods.add(function("method"));
+      if (matchAny(CLASS)) {
+        methods.add(function("class"));
+      } else {
+        methods.add(function("method"));
+      }
     }
 
     consume(RIGHT_BRACE, "Expect '}' after class body.");
@@ -223,7 +227,7 @@ class Parser {
 
   private Stmt.Function function(String kind) {
     Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
-    return new Stmt.Function(name, lambda());
+    return new Stmt.Function(name, lambda(), kind);
   }
 
   private Expr expression() {

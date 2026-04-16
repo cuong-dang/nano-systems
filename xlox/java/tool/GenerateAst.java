@@ -39,7 +39,7 @@ public class GenerateAst {
             "Break:",
             "Class: Token name, List<Stmt.Function> methods",
             "Expression: Expr expression",
-            "Function: Token name, Expr.Lambda lambda",
+            "Function: Token name, Expr.Lambda lambda, String kind",
             "If: Expr condition, Stmt thenBranch, Stmt elseBranch",
             "Print: Expr expression",
             "Return: Token keyword, Expr value",
