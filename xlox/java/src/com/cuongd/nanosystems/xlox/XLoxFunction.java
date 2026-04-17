@@ -3,20 +3,30 @@ package com.cuongd.nanosystems.xlox;
 import java.util.List;
 
 class XLoxFunction implements XLoxCallable {
+  enum Type {
+    PLAIN,
+    INITIALIZER,
+    GETTER,
+  }
+
   private final Stmt.Function declaration;
   private final Environment closure;
-  private final boolean isInitializer;
+  private final Type type;
 
-  XLoxFunction(Stmt.Function declaration, Environment closure, boolean isInitializer) {
+  XLoxFunction(Stmt.Function declaration, Environment closure, Type type) {
     this.declaration = declaration;
     this.closure = closure;
-    this.isInitializer = isInitializer;
+    this.type = type;
   }
 
   XLoxFunction bind(XLoxInstance instance) {
     Environment environment = new Environment(closure);
     environment.define("this", instance);
-    return new XLoxFunction(declaration, environment, isInitializer);
+    return new XLoxFunction(declaration, environment, type);
+  }
+
+  public boolean isGetter() {
+    return type == Type.GETTER;
   }
 
   @Override
@@ -34,11 +44,11 @@ class XLoxFunction implements XLoxCallable {
     try {
       interpreter.executeBlock(declaration.lambda.body, environment);
     } catch (Return r) {
-      if (isInitializer) return closure.getAt(0, "this");
+      if (type == Type.INITIALIZER) return closure.getAt(0, "this");
       return r.value;
     }
 
-    if (isInitializer) return closure.getAt(0, "this");
+    if (type == Type.INITIALIZER) return closure.getAt(0, "this");
     return null;
   }
 

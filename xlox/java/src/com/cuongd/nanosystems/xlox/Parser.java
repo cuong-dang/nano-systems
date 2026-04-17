@@ -52,6 +52,7 @@ class Parser {
   private final boolean replMode;
   private int current = 0;
   private int loopDepth = 0;
+  private boolean inClassDeclaration;
 
   Parser(List<Token> tokens, boolean replMode) {
     this.tokens = tokens;
@@ -83,9 +84,11 @@ class Parser {
   }
 
   private Stmt classDeclaration() {
+    boolean enclosingInClassDeclaration = inClassDeclaration;
+    inClassDeclaration = true;
+
     Token name = consume(IDENTIFIER, "Expect class name.");
     consume(LEFT_BRACE, "Expect '{' before class body.");
-
     List<Stmt.Function> methods = new ArrayList<>();
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
       if (matchAny(CLASS)) {
@@ -94,8 +97,9 @@ class Parser {
         methods.add(function("method"));
       }
     }
-
     consume(RIGHT_BRACE, "Expect '}' after class body.");
+
+    inClassDeclaration = enclosingInClassDeclaration;
 
     return new Stmt.Class(name, methods);
   }
@@ -227,7 +231,10 @@ class Parser {
 
   private Stmt.Function function(String kind) {
     Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
-    return new Stmt.Function(name, lambda(), kind);
+    if (inClassDeclaration && !kind.equals("class") && !check(LEFT_PAREN)) {
+      kind = "getter";
+    }
+    return new Stmt.Function(name, lambda(kind.equals("getter")), kind);
   }
 
   private Expr expression() {
@@ -356,7 +363,7 @@ class Parser {
   }
 
   private Expr primary() {
-    if (matchAny(FUN)) return lambda();
+    if (matchAny(FUN)) return lambda(false);
     if (matchAny(FALSE)) return new Expr.Literal(false);
     if (matchAny(TRUE)) return new Expr.Literal(true);
     if (matchAny(NIL)) return new Expr.Literal(null);
@@ -375,19 +382,22 @@ class Parser {
     throw error(peek(), "Expect expression.");
   }
 
-  private Expr.Lambda lambda() {
-    consume(LEFT_PAREN, "Expect '(' after lambda.");
+  private Expr.Lambda lambda(boolean isGetter) {
     List<Token> parameters = new ArrayList<>();
-    if (!check(RIGHT_PAREN)) {
-      do {
-        if (parameters.size() >= 255) {
-          error(peek(), "Can't have more than 255 parameters.");
-        }
 
-        parameters.add(consume(IDENTIFIER, "Expect parameter name."));
-      } while (matchAny(COMMA));
+    if (!isGetter) {
+      consume(LEFT_PAREN, "Expect '(' after lambda.");
+      if (!check(RIGHT_PAREN)) {
+        do {
+          if (parameters.size() >= 255) {
+            error(peek(), "Can't have more than 255 parameters.");
+          }
+
+          parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+        } while (matchAny(COMMA));
+      }
+      consume(RIGHT_PAREN, "Expect ')' after parameters.");
     }
-    consume(RIGHT_PAREN, "Expect ')' after parameters.");
     consume(LEFT_BRACE, "Expect '{' before lambda body.");
     List<Stmt> body = block();
     return new Expr.Lambda(parameters, body);

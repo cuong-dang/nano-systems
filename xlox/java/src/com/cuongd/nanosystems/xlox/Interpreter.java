@@ -154,7 +154,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   public Object visitGetExpr(Get expr) {
     Object object = eval(expr.object);
     if (object instanceof XLoxInstance) {
-      return ((XLoxInstance) object).get(expr.name);
+      Object property = ((XLoxInstance) object).get(expr.name);
+      if (property instanceof XLoxFunction && ((XLoxFunction) property).isGetter()) {
+        return ((XLoxFunction) property).call(this, new ArrayList<>());
+      }
+      return property;
     }
 
     throw new RuntimeError(expr.name, "Only instances have properties.");
@@ -167,7 +171,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitLambdaExpr(Lambda expr) {
-    return new XLoxFunction(new Function(null, expr, "lambda"), environment, false);
+    return new XLoxFunction(
+        new Function(null, expr, "lambda"), environment, XLoxFunction.Type.PLAIN);
   }
 
   @Override
@@ -243,7 +248,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitFunctionStmt(Function stmt) {
-    XLoxFunction function = new XLoxFunction(stmt, environment, false);
+    XLoxFunction function = new XLoxFunction(stmt, environment, XLoxFunction.Type.PLAIN);
     environment.define(stmt.name.lexeme, function);
     return null;
   }
@@ -266,10 +271,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     Map<String, XLoxFunction> instanceMethods = new HashMap<>();
     Map<String, XLoxFunction> classMethods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
-      XLoxFunction function =
-          new XLoxFunction(method, environment, method.name.lexeme.equals("init"));
-      if (method.kind.equals("method")) instanceMethods.put(method.name.lexeme, function);
-      else {
+      XLoxFunction.Type type = XLoxFunction.Type.PLAIN;
+      if (method.kind.equals("init")) {
+        type = XLoxFunction.Type.INITIALIZER;
+      } else if (method.kind.equals("getter")) {
+        type = XLoxFunction.Type.GETTER;
+      }
+      XLoxFunction function = new XLoxFunction(method, environment, type);
+      if (method.kind.equals("method") || method.kind.equals("getter")) {
+        instanceMethods.put(method.name.lexeme, function);
+      } else {
         assert method.kind.equals("class");
         classMethods.put(method.name.lexeme, function);
       }
