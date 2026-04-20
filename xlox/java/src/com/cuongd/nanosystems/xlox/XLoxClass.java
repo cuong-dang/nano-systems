@@ -5,14 +5,17 @@ import java.util.Map;
 
 class XLoxClass extends XLoxInstance implements XLoxCallable {
   final String name;
+  final XLoxClass superclass;
   private final Map<String, XLoxFunction> instanceMethods;
   private final Map<String, XLoxFunction> classMethods;
 
   XLoxClass(
       String name,
+      XLoxClass superclass,
       Map<String, XLoxFunction> instanceMethods,
       Map<String, XLoxFunction> classMethods) {
     this.name = name;
+    this.superclass = superclass;
     this.instanceMethods = instanceMethods;
     this.classMethods = classMethods;
     this.klass = this;
@@ -21,6 +24,9 @@ class XLoxClass extends XLoxInstance implements XLoxCallable {
   XLoxFunction findMethod(String name) {
     if (instanceMethods.containsKey(name)) {
       return instanceMethods.get(name);
+    }
+    if (superclass != null) {
+      return superclass.findMethod(name);
     }
     return null;
   }
@@ -33,6 +39,10 @@ class XLoxClass extends XLoxInstance implements XLoxCallable {
 
     if (classMethods.containsKey(name.lexeme)) {
       return classMethods.get(name.lexeme);
+    }
+
+    if (superclass != null) {
+      return superclass.get(name);
     }
 
     throw new RuntimeError(name, "Undefined class method '" + name.lexeme + "'.");

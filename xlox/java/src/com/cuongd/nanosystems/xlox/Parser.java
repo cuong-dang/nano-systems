@@ -37,6 +37,7 @@ import static com.cuongd.nanosystems.xlox.TokenType.SEMICOLON;
 import static com.cuongd.nanosystems.xlox.TokenType.SLASH;
 import static com.cuongd.nanosystems.xlox.TokenType.STAR;
 import static com.cuongd.nanosystems.xlox.TokenType.STRING;
+import static com.cuongd.nanosystems.xlox.TokenType.SUPER;
 import static com.cuongd.nanosystems.xlox.TokenType.THIS;
 import static com.cuongd.nanosystems.xlox.TokenType.TRUE;
 import static com.cuongd.nanosystems.xlox.TokenType.VAR;
@@ -88,6 +89,13 @@ class Parser {
     inClassDeclaration = true;
 
     Token name = consume(IDENTIFIER, "Expect class name.");
+
+    Expr.Variable superclass = null;
+    if (matchAny(LESS)) {
+      consume(IDENTIFIER, "Expect superclass name.");
+      superclass = new Expr.Variable(previous());
+    }
+
     consume(LEFT_BRACE, "Expect '{' before class body.");
     List<Stmt.Function> methods = new ArrayList<>();
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
@@ -101,7 +109,7 @@ class Parser {
 
     inClassDeclaration = enclosingInClassDeclaration;
 
-    return new Stmt.Class(name, methods);
+    return new Stmt.Class(name, superclass, methods);
   }
 
   private Stmt varDeclaration() {
@@ -368,6 +376,12 @@ class Parser {
     if (matchAny(TRUE)) return new Expr.Literal(true);
     if (matchAny(NIL)) return new Expr.Literal(null);
     if (matchAny(THIS)) return new Expr.This(previous());
+    if (matchAny(SUPER)) {
+      Token keyword = previous();
+      consume(DOT, "Expect '.' after super");
+      Token method = consume(IDENTIFIER, "Expect superclass method name.");
+      return new Expr.Super(keyword, method);
+    }
 
     if (matchAny(NUMBER, STRING)) return new Expr.Literal(previous().literal);
 

@@ -17,6 +17,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private enum ClassType {
     NONE,
     CLASS,
+    SUBCLASS,
   }
 
   private enum VariableState {
@@ -110,6 +111,17 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override
+  public Void visitSuperExpr(Expr.Super expr) {
+    if (currentClass == ClassType.NONE) {
+      XLox.error(expr.keyword, "Can't use 'super' outside of a class.");
+    } else if (currentClass != ClassType.SUBCLASS) {
+      XLox.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
+    }
+    resolveLocal(expr, expr.keyword, false);
+    return null;
+  }
+
+  @Override
   public Void visitTernaryExpr(Expr.Ternary expr) {
     resolve(expr.cond);
     resolve(expr.yes);
@@ -170,6 +182,20 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     declare(stmt.name);
     define(stmt.name);
 
+    if (stmt.superclass != null && stmt.superclass.name.lexeme.equals(stmt.name.lexeme)) {
+      XLox.error(stmt.superclass.name, "A class can't inherit from itself.");
+    }
+
+    if (stmt.superclass != null) {
+      currentClass = ClassType.SUBCLASS;
+      resolve(stmt.superclass);
+    }
+
+    if (stmt.superclass != null) {
+      beginScope();
+      scopes.peek().put("super", new VariableTokenState(stmt.superclass.name, VariableState.READ));
+    }
+
     beginScope();
     scopes.peek().put("this", new VariableTokenState(null, VariableState.READ));
 
@@ -184,6 +210,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     endScope();
+
+    if (stmt.superclass != null) endScope();
 
     currentClass = enclosingClass;
     return null;

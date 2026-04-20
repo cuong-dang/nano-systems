@@ -205,6 +205,20 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
   }
 
   @Override
+  public Object visitSuperExpr(Super expr) {
+    int distance = locals.get(expr);
+    XLoxClass superclass = (XLoxClass) environment.getAt(distance, "super");
+
+    XLoxInstance object = (XLoxInstance) environment.getAt(distance - 1, "this");
+
+    XLoxFunction method = superclass.findMethod(expr.method.lexeme);
+    if (method == null) {
+      throw new RuntimeError(expr.method, "Undefined property '" + expr.method.lexeme + "'.");
+    }
+    return method.bind(object);
+  }
+
+  @Override
   public Object visitTernaryExpr(Ternary expr) {
     if (isTruthy(eval(expr.cond))) {
       return eval(expr.yes);
@@ -266,7 +280,20 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
   @Override
   public Object visitClassStmt(Stmt.Class stmt) {
+    Object superclass = null;
+    if (stmt.superclass != null) {
+      superclass = eval(stmt.superclass);
+      if (!(superclass instanceof XLoxClass)) {
+        throw new RuntimeError(stmt.superclass.name, "Superclass must be a class.");
+      }
+    }
+
     environment.define(stmt.name.lexeme, null);
+
+    if (stmt.superclass != null) {
+      environment = new Environment(environment);
+      environment.define("super", superclass);
+    }
 
     Map<String, XLoxFunction> instanceMethods = new HashMap<>();
     Map<String, XLoxFunction> classMethods = new HashMap<>();
@@ -286,7 +313,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
       }
     }
 
-    XLoxClass klass = new XLoxClass(stmt.name.lexeme, instanceMethods, classMethods);
+    XLoxClass klass =
+        new XLoxClass(stmt.name.lexeme, (XLoxClass) superclass, instanceMethods, classMethods);
+
+    if (superclass != null) {
+      environment = environment.enclosing;
+    }
+
     environment.assign(stmt.name, klass);
     return null;
   }
