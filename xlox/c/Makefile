@@ -1,51 +1,38 @@
-ifeq ($(CPP),true)
-	# Ideally, we'd add -pedantic-errors, but the use of designated initializers
-	# means clox relies on some GCC/Clang extensions to compile as C++.
-	CFLAGS := -std=c++11
-	C_LANG := -x c++
-else
-	CFLAGS := -std=c99
-endif
+BUILD_DIR := build
+SOURCE_DIR := src
 
-CFLAGS += -Wall -Wextra -Werror -Wno-unused-parameter
-
-BASE := build
 # Mode configuration.
 ifeq ($(MODE),debug)
 	CFLAGS += -O0 -DDEBUG -g
-	BUILD_DIR := $(BASE)/debug
+	MODE := $(BUILD_DIR)/debug
 else
 	CFLAGS += -O3 -flto
-	BUILD_DIR := $(BASE)/release
+	MODE := $(BUILD_DIR)/release
 endif
 
 # Files.
-SOURCE_DIR := src
 HEADERS := $(wildcard $(SOURCE_DIR)/*.h)
 SOURCES := $(wildcard $(SOURCE_DIR)/*.c)
-OBJECTS := $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES:.c=.o)))
+OBJECTS := $(addprefix $(BUILD_DIR)/$(MODE)/, $(notdir $(SOURCES:.c=.o)))
 
+# C flags.
+CFLAGS := -std=c99 -Wall -Wextra -Werror -Wpedantic -Wno-unused-parameter
 
 # Targets ---------------------------------------------------------------------
 
-run: $(BASE)/xlox
-	@ ./$(BASE)/xlox
+run: $(BUILD_DIR)/xlox
+	@ ./$(BUILD_DIR)/xlox
 
 clean:
-	@ rm -rf $(BASE)
+	@ rm -rf $(BUILD_DIR)
 
 # Link the interpreter.
-$(BASE)/xlox: $(OBJECTS)
-	@ printf "%8s %-40s %s\n" $(CC) $@ "$(CFLAGS)"
-	@ mkdir -p $(BASE)
-	@ $(CC) $(CFLAGS) $^ -o $@
+$(BUILD_DIR)/xlox: $(OBJECTS)
+	$(CC) $(CFLAGS) $^ -o $@
 
 # Compile object files.
-$(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.c $(HEADERS)
-	@ printf "%8s %-40s %s\n" $(CC) $< "$(CFLAGS)"
-	@ mkdir -p $(BUILD_DIR)
-	@ $(CC) -c $(C_LANG) $(CFLAGS) -o $@ $<
-
-
+$(BUILD_DIR)/$(MODE)/%.o: $(SOURCE_DIR)/%.c $(HEADERS)
+	@ mkdir -p $(BUILD_DIR)/$(MODE)
+	$(CC) -c $(C_LANG) $(CFLAGS) -o $@ $<
 
 .PHONY: run clean
