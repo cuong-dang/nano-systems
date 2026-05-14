@@ -5,4 +5,4 @@ systems (e.g., interpreters, operating systems, databases). Unlike the
 on exercises and partial implementations, this repo contains complete,
 working systems, albeit modest in scope.
 
-- xlox: Interpreter implementations of the Lox programming language
+- zlox: Bytecode VM for the Lox programming language in Zig
