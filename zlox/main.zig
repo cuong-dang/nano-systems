@@ -11,5 +11,8 @@ pub fn main() !void {
     defer chunk.deinit(gpa);
 
     try chunk.write(gpa, @intFromEnum(OpCode.RETURN));
+    const constant = try chunk.addConstant(gpa, 1.2);
+    try chunk.write(gpa, @intFromEnum(OpCode.CONSTANT));
+    try chunk.write(gpa, constant);
     debug.disassembleChunk(&chunk, "test chunk");
 }
