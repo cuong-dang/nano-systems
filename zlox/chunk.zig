@@ -1,19 +1,29 @@
 const std = @import("std");
 
-const OpCode = enum {
-    @"return",
+pub const OpCode = enum {
+    RETURN,
 };
 
-const Chunk = struct {
-    code: std.ArrayList(u8),
+pub const Chunk = struct {
+    _code: std.ArrayList(u8),
 
     pub fn init() Chunk {
-        return .{ .code = .empty };
+        return .{ ._code = .empty };
     }
 
-    pub fn deinit(self: Chunk, gpa: std.mem.Allocator) void {
-        self.code.deinit(gpa);
+    pub fn deinit(self: *Chunk, gpa: std.mem.Allocator) void {
+        self._code.deinit(gpa);
     }
 
-    pub fn write(self: Chunk, )
+    pub fn count(self: *const Chunk) usize {
+        return self._code.items.len;
+    }
+
+    pub fn get(self: *const Chunk, offset: usize) u8 {
+        return self._code.items[offset];
+    }
+
+    pub fn write(self: *Chunk, gpa: std.mem.Allocator, byte: u8) !void {
+        try self._code.append(gpa, byte);
+    }
 };
