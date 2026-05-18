@@ -10,9 +10,10 @@ pub fn main() !void {
     var chunk: Chunk = .init();
     defer chunk.deinit(gpa);
 
-    try chunk.write(gpa, @intFromEnum(OpCode.RETURN));
     const constant = try chunk.addConstant(gpa, 1.2);
-    try chunk.write(gpa, @intFromEnum(OpCode.CONSTANT));
-    try chunk.write(gpa, constant);
+    try chunk.write(gpa, @intFromEnum(OpCode.CONSTANT), 123);
+    try chunk.write(gpa, constant, 123);
+
+    try chunk.write(gpa, @intFromEnum(OpCode.RETURN), 123);
     debug.disassembleChunk(&chunk, "test chunk");
 }
