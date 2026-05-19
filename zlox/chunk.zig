@@ -37,6 +37,10 @@ pub const Chunk = struct {
         return self._lineInfo.items[self._lineInfo.items.len - 1].line;
     }
 
+    pub fn code(self: *const Chunk) [*]const u8 {
+        return self._code.items.ptr;
+    }
+
     pub fn write(self: *Chunk, gpa: std.mem.Allocator, byte: u8, line: usize) !void {
         try self._code.append(gpa, byte);
         if (self._lineInfo.items.len == 0 or
@@ -54,10 +58,15 @@ pub const Chunk = struct {
 
 pub const OpCode = enum {
     CONSTANT,
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    NEGATE,
     RETURN,
 };
 
-const Value = f64;
+pub const Value = f64;
 
 pub fn printValue(value: Value) void {
     std.debug.print("{}", .{value});

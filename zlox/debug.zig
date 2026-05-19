@@ -13,7 +13,7 @@ pub fn disassembleChunk(chunk: *Chunk, name: []const u8) void {
     }
 }
 
-fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
+pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
     std.debug.print("{d:0>4} ", .{offset});
     if (offset > 0 and chunk.lineOf(offset) == chunk.lineOf(offset - 1)) {
         std.debug.print("   | ", .{});
@@ -23,8 +23,13 @@ fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
 
     const op: OpCode = @enumFromInt(chunk.get(offset));
     switch (op) {
-        .CONSTANT => return constantInstruction(OpCode.CONSTANT, chunk, offset),
-        .RETURN => return simpleInstruction(OpCode.RETURN, offset),
+        .CONSTANT => return constantInstruction(.CONSTANT, chunk, offset),
+        .ADD => return simpleInstruction(.ADD, offset),
+        .SUBTRACT => return simpleInstruction(.SUBTRACT, offset),
+        .MULTIPLY => return simpleInstruction(.MULTIPLY, offset),
+        .DIVIDE => return simpleInstruction(.DIVIDE, offset),
+        .NEGATE => return simpleInstruction(.NEGATE, offset),
+        .RETURN => return simpleInstruction(.RETURN, offset),
     }
 }
 
