@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./chunk.zig").Value;
+const Compiler = @import("./compiler.zig").Compiler;
 const printValue = @import("./chunk.zig").printValue;
 const debug = @import("./debug.zig");
 
@@ -23,10 +24,9 @@ pub const VM = struct {
         self._stackTop = &self._stack;
     }
 
-    pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
-        self._chunk = chunk;
-        self._ip = chunk.code();
-        return self.run();
+    pub fn interpret(source: []const u8) InterpretResult {
+        Compiler.compile(source);
+        return .INTERPRET_OK;
     }
 
     fn run(self: *VM) InterpretResult {

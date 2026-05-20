@@ -5,26 +5,31 @@ const OpCode = @import("./chunk.zig").OpCode;
 const debug = @import("./debug.zig");
 const VM = @import("./vm.zig").VM;
 
-const gpa = std.heap.page_allocator;
-
-pub fn main() !void {
-    var chunk: Chunk = .init();
-    defer chunk.deinit(gpa);
-
-    var constant = try chunk.addConstant(gpa, 1);
-    try chunk.write(gpa, @intFromEnum(OpCode.CONSTANT), 100);
-    try chunk.write(gpa, constant, 100);
-
-    constant = try chunk.addConstant(gpa, 2);
-    try chunk.write(gpa, @intFromEnum(OpCode.CONSTANT), 100);
-    try chunk.write(gpa, constant, 100);
-
-    try chunk.write(gpa, @intFromEnum(OpCode.SUBTRACT), 100);
-
-    try chunk.write(gpa, @intFromEnum(OpCode.NEGATE), 100);
-    try chunk.write(gpa, @intFromEnum(OpCode.RETURN), 100);
-
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const args = try init.minimal.args.toSlice(gpa);
     var vm: VM = .init();
     vm.resetStack();
-    _ = vm.interpret(&chunk);
+
+    if (args.len == 1) {
+        try repl(init.io);
+        // } else if (args.len == 2) {
+        //     runFile(args[1]);
+    } else {
+        std.debug.print("Usage: zlox [path]\n", .{});
+        std.process.exit(64);
+    }
+}
+
+fn repl(io: std.Io) !void {
+    var buffer: [1024]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &buffer);
+    var stdin = &reader.interface;
+
+    while (true) {
+        try std.Io.File.stdout().writeStreamingAll(io, "> ");
+        if (try stdin.takeDelimiter('\n')) |line| {
+            _ = VM.interpret(line);
+        }
+    }
 }
