@@ -17,7 +17,7 @@ pub const Compiler = struct {
             } else {
                 print("   | ", .{});
             }
-            print("{d:>2} '{s}'\n", .{ token.tokenType, token.lexeme });
+            print("{s} '{s}'\n", .{ @tagName(token.tokenType), token.lexeme });
         }
     }
 };
