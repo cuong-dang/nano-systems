@@ -2,17 +2,17 @@ const std = @import("std");
 
 pub const Chunk = struct {
     _code: std.ArrayList(u8),
-    _constants: std.ArrayList(Value),
-    _lineInfo: std.ArrayList(LineInfo),
+    constants: std.ArrayList(Value),
+    lineInfo: std.ArrayList(LineInfo),
 
     pub fn init() Chunk {
-        return .{ ._code = .empty, ._constants = .empty, ._lineInfo = .empty };
+        return .{ ._code = .empty, .constants = .empty, .lineInfo = .empty };
     }
 
     pub fn deinit(self: *Chunk, gpa: std.mem.Allocator) void {
         self._code.deinit(gpa);
-        self._constants.deinit(gpa);
-        self._lineInfo.deinit(gpa);
+        self.constants.deinit(gpa);
+        self.lineInfo.deinit(gpa);
     }
 
     pub fn count(self: *const Chunk) usize {
@@ -24,17 +24,17 @@ pub const Chunk = struct {
     }
 
     pub fn getConstant(self: *const Chunk, constant: usize) Value {
-        return self._constants.items[constant];
+        return self.constants.items[constant];
     }
 
     pub fn lineOf(self: *const Chunk, offset: usize) usize {
-        if (self._lineInfo.items.len == 1) return self._lineInfo.items[0].line;
-        for (self._lineInfo.items, 1..) |lineInfo, i| {
+        if (self.lineInfo.items.len == 1) return self.lineInfo.items[0].line;
+        for (self.lineInfo.items, 1..) |lineInfo, i| {
             if (offset < lineInfo.offset) {
-                return self._lineInfo.items[i - 1].line;
+                return self.lineInfo.items[i - 1].line;
             }
         }
-        return self._lineInfo.items[self._lineInfo.items.len - 1].line;
+        return self.lineInfo.items[self.lineInfo.items.len - 1].line;
     }
 
     pub fn code(self: *const Chunk) [*]const u8 {
@@ -43,16 +43,16 @@ pub const Chunk = struct {
 
     pub fn write(self: *Chunk, gpa: std.mem.Allocator, byte: u8, line: usize) !void {
         try self._code.append(gpa, byte);
-        if (self._lineInfo.items.len == 0 or
-            self._lineInfo.items[self._lineInfo.items.len - 1].line != line)
+        if (self.lineInfo.items.len == 0 or
+            self.lineInfo.items[self.lineInfo.items.len - 1].line != line)
         {
-            try self._lineInfo.append(gpa, .{ .offset = self._code.items.len - 1, .line = line });
+            try self.lineInfo.append(gpa, .{ .offset = self._code.items.len - 1, .line = line });
         }
     }
 
     pub fn addConstant(self: *Chunk, gpa: std.mem.Allocator, value: Value) !u8 {
-        try self._constants.append(gpa, value);
-        return @intCast(self._constants.items.len - 1);
+        try self.constants.append(gpa, value);
+        return @intCast(self.constants.items.len - 1);
     }
 };
 

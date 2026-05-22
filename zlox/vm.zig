@@ -11,38 +11,49 @@ const debug = @import("./debug.zig");
 const stackMax = 256;
 
 pub const VM = struct {
-    _chunk: *Chunk,
-    _ip: [*]const u8,
-    _stack: [stackMax]Value,
-    _stackTop: [*]Value,
+    chunk: *Chunk,
+    ip: [*]const u8,
+    stack: [stackMax]Value,
+    stackTop: [*]Value,
+    gpa: std.mem.Allocator,
 
-    pub fn init() VM {
-        return .{ ._chunk = undefined, ._ip = undefined, ._stack = undefined, ._stackTop = undefined };
+    pub fn init(gpa: std.mem.Allocator) VM {
+        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .gpa = gpa };
     }
 
     pub fn resetStack(self: *VM) void {
-        self._stackTop = &self._stack;
+        self.stackTop = &self.stack;
     }
 
-    pub fn interpret(source: []const u8) InterpretResult {
-        Compiler.compile(source);
-        return .INTERPRET_OK;
+    pub fn interpret(self: *VM, source: []const u8) InterpretResult {
+        const chunk: Chunk = .init();
+        defer chunk.deinit(self.gpa);
+        var compiler: Compiler = .init(source);
+
+        if (!compiler.compile(&chunk)) {
+            return .INTERPRET_COMPILE_ERROR;
+        }
+
+        self.chunk = &chunk;
+        self.ip = chunk.code();
+
+        return run();
     }
 
     fn run(self: *VM) InterpretResult {
         while (true) {
             if (builtin.mode == .Debug) {
-                const count = self._stackTop - &self._stack;
+                const count = self.stackTop - &self.stack;
                 for (0..count) |i| {
                     std.debug.print("[ ", .{});
-                    printValue(self._stack[i]);
+                    printValue(self.stack[i]);
                     std.debug.print(" ]", .{});
                 }
                 if (count != 0) {
                     std.debug.print("\n", .{});
                 }
 
-                _ = debug.disassembleInstruction(self._chunk, self._ip - self._chunk.code());
+                _ = debug.disassembleInstruction(self.chunk, self.ip - self.chunk.code());
             }
 
             const instruction: OpCode = @enumFromInt(self.read_byte());
@@ -72,23 +83,23 @@ pub const VM = struct {
     }
 
     fn read_byte(self: *VM) u8 {
-        const byte = self._ip[0];
-        self._ip += 1;
+        const byte = self.ip[0];
+        self.ip += 1;
         return byte;
     }
 
     fn read_constant(self: *VM) Value {
-        return self._chunk.getConstant(self.read_byte());
+        return self.chunk.getConstant(self.read_byte());
     }
 
     fn push(self: *VM, value: Value) void {
-        self._stackTop[0] = value;
-        self._stackTop += 1;
+        self.stackTop[0] = value;
+        self.stackTop += 1;
     }
 
     fn pop(self: *VM) Value {
-        self._stackTop -= 1;
-        return self._stackTop[0];
+        self.stackTop -= 1;
+        return self.stackTop[0];
     }
 };
 
