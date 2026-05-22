@@ -1,23 +1,24 @@
 const std = @import("std");
 
 pub const Scanner = struct {
-    _source: []const u8,
-    _start: usize,
-    _current: usize,
-    _line: usize,
+    source: []const u8,
+    start: usize,
+    current: usize,
+    line: usize,
 
     pub fn init(source: []const u8) Scanner {
-        return .{ ._source = source, ._start = 0, ._current = 0, ._line = 1 };
+        return .{ .source = source, .start = 0, .current = 0, .line = 1 };
     }
 
     pub fn scanToken(self: *Scanner) Token {
         self.skipWhitespace();
-        self._start = self._current;
+        self.start = self.current;
         if (self.isAtEnd()) return self.makeToken(.EOF);
 
         const c = self.peek();
         self.advance();
 
+        if (isAlpha(c)) return self.identifier();
         if (std.ascii.isDigit(c)) return self.number();
 
         switch (c) {
@@ -40,43 +41,39 @@ pub const Scanner = struct {
 
             '"' => return self.string(),
 
-            else => unreachable,
+            else => return self.errorToken("Unexpected character."),
         }
-
-        return self.errorToken("Unexpected character.");
     }
 
     fn isAtEnd(self: *const Scanner) bool {
-        return self._current == self._source.len;
+        return self.current == self.source.len;
     }
 
     fn advance(self: *Scanner) void {
-        self._current += 1;
+        self.current += 1;
     }
 
     fn peek(self: *const Scanner) u8 {
-        if (self.isAtEnd()) return 0;
-        return self._source[self._current];
+        return if (self.isAtEnd()) 0 else self.source[self.current];
     }
 
     fn peekNext(self: *const Scanner) u8 {
-        if (self._current + 1 == self._source.len) return 0;
-        return self._source[self._current + 1];
+        return if (self.current + 1 == self.source.len) 0 else self.source[self.current + 1];
     }
 
     fn match(self: *Scanner, c: u8) bool {
         if (self.isAtEnd()) return false;
-        if (self._source[self._current] != c) return false;
+        if (self.source[self.current] != c) return false;
         self.advance();
         return true;
     }
 
     fn makeToken(self: *const Scanner, tokenType: TokenType) Token {
-        return .{ .tokenType = tokenType, .lexeme = self._source[self._start..self._current], .line = self._line };
+        return .{ .tokenType = tokenType, .lexeme = self.source[self.start..self.current], .line = self.line };
     }
 
     fn errorToken(self: *const Scanner, message: []const u8) Token {
-        return .{ .tokenType = .ERROR, .lexeme = message, .line = self._line };
+        return .{ .tokenType = .ERROR, .lexeme = message, .line = self.line };
     }
 
     fn skipWhitespace(self: *Scanner) void {
@@ -86,7 +83,7 @@ pub const Scanner = struct {
                 ' ', '\r', '\t' => self.advance(),
 
                 '\n' => {
-                    self._line += 1;
+                    self.line += 1;
                     self.advance();
                 },
 
@@ -99,6 +96,55 @@ pub const Scanner = struct {
                 else => return,
             }
         }
+    }
+
+    fn identifier(self: *Scanner) Token {
+        while (isAlpha(self.peek()) or std.ascii.isDigit(self.peek())) self.advance();
+
+        const identifierType: TokenType = switch (self.source[self.start]) {
+            'a' => self.checkKeyword(1, "nd", .AND),
+            'c' => self.checkKeyword(1, "lass", .CLASS),
+            'e' => self.checkKeyword(1, "lse", .ELSE),
+            'i' => self.checkKeyword(1, "f", .IF),
+            'n' => self.checkKeyword(1, "il", .NIL),
+            'o' => self.checkKeyword(1, "r", .OR),
+            'p' => self.checkKeyword(1, "rint", .PRINT),
+            'r' => self.checkKeyword(1, "eturn", .RETURN),
+            's' => self.checkKeyword(1, "uper", .SUPER),
+            'v' => self.checkKeyword(1, "ar", .VAR),
+            'w' => self.checkKeyword(1, "hile", .WHILE),
+
+            'f' => if (self.current - self.start > 1)
+                switch (self.source[self.start + 1]) {
+                    'a' => self.checkKeyword(2, "lse", .FALSE),
+                    'o' => self.checkKeyword(2, "r", .FOR),
+                    'u' => self.checkKeyword(2, "n", .FUN),
+                    else => .IDENTIFIER,
+                }
+            else
+                .IDENTIFIER,
+
+            't' => if (self.current - self.start > 1)
+                switch (self.source[self.start + 1]) {
+                    'h' => self.checkKeyword(2, "is", .THIS),
+                    'r' => self.checkKeyword(2, "ue", .TRUE),
+                    else => .IDENTIFIER,
+                }
+            else
+                .IDENTIFIER,
+            else => .IDENTIFIER,
+        };
+
+        return self.makeToken(identifierType);
+    }
+
+    fn checkKeyword(self: *const Scanner, start: usize, rest: []const u8, tokenType: TokenType) TokenType {
+        if (self.current - self.start - start == rest.len and
+            std.mem.eql(u8, self.source[self.start + start .. self.current], rest))
+        {
+            return tokenType;
+        }
+        return .IDENTIFIER;
     }
 
     fn number(self: *Scanner) Token {
@@ -114,7 +160,7 @@ pub const Scanner = struct {
 
     fn string(self: *Scanner) Token {
         while (self.peek() != '"' and !self.isAtEnd()) {
-            if (self.peek() == '\n') self._line += 1;
+            if (self.peek() == '\n') self.line += 1;
             self.advance();
         }
 
@@ -182,3 +228,7 @@ const TokenType = enum {
     ERROR,
     EOF,
 };
+
+fn isAlpha(c: u8) bool {
+    return std.ascii.isAlphabetic(c) or c == '_';
+}
