@@ -15,32 +15,35 @@ pub const VM = struct {
     ip: [*]const u8,
     stack: [stackMax]Value,
     stackTop: [*]Value,
+    compiler: Compiler,
     gpa: std.mem.Allocator,
 
     pub fn init(gpa: std.mem.Allocator) VM {
-        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .gpa = gpa };
+        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .compiler = .init(gpa), .gpa = gpa };
     }
 
     pub fn resetStack(self: *VM) void {
         self.stackTop = &self.stack;
     }
 
-    pub fn interpret(self: *VM, source: []const u8) InterpretResult {
-        const chunk: Chunk = .init();
+    pub fn interpret(self: *VM, source: []const u8) !InterpretResult {
+        var chunk: Chunk = .init();
         defer chunk.deinit(self.gpa);
-        var compiler: Compiler = .init(source);
 
-        if (!compiler.compile(&chunk)) {
+        if (!(try self.compiler.compile(source, &chunk))) {
             return .INTERPRET_COMPILE_ERROR;
         }
 
         self.chunk = &chunk;
         self.ip = chunk.code();
 
-        return run();
+        return self.run();
     }
 
     fn run(self: *VM) InterpretResult {
+        if (builtin.mode == .Debug) {
+            std.debug.print("== run ==\n", .{});
+        }
         while (true) {
             if (builtin.mode == .Debug) {
                 const count = self.stackTop - &self.stack;

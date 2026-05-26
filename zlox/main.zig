@@ -6,13 +6,12 @@ const debug = @import("./debug.zig");
 const VM = @import("./vm.zig").VM;
 
 pub fn main(init: std.process.Init) !void {
-    const gpa = init.gpa;
-    const args = try init.minimal.args.toSlice(gpa);
-    var vm: VM = .init();
+    const args = try init.minimal.args.toSlice(init.gpa);
+    var vm: VM = .init(init.gpa);
     vm.resetStack();
 
     if (args.len == 1) {
-        try repl(init.io);
+        try repl(&vm, init.io);
         // } else if (args.len == 2) {
         //     runFile(args[1]);
     } else {
@@ -21,7 +20,7 @@ pub fn main(init: std.process.Init) !void {
     }
 }
 
-fn repl(io: std.Io) !void {
+fn repl(vm: *VM, io: std.Io) !void {
     var buffer: [1024]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buffer);
     var stdin = &reader.interface;
@@ -29,7 +28,7 @@ fn repl(io: std.Io) !void {
     while (true) {
         try std.Io.File.stdout().writeStreamingAll(io, "> ");
         if (try stdin.takeDelimiter('\n')) |line| {
-            _ = VM.interpret(line);
+            _ = try vm.interpret(line);
         }
     }
 }

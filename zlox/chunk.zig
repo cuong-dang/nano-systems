@@ -50,9 +50,9 @@ pub const Chunk = struct {
         }
     }
 
-    pub fn addConstant(self: *Chunk, gpa: std.mem.Allocator, value: Value) !u8 {
+    pub fn addConstant(self: *Chunk, gpa: std.mem.Allocator, value: Value) !usize {
         try self.constants.append(gpa, value);
-        return @intCast(self.constants.items.len - 1);
+        return self.constants.items.len - 1;
     }
 };
 
