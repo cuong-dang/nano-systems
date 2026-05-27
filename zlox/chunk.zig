@@ -59,15 +59,33 @@ pub const Chunk = struct {
 
 pub const OpCode = enum {
     CONSTANT,
+    NIL,
+    TRUE,
+    FALSE,
     ADD,
     SUBTRACT,
     MULTIPLY,
     DIVIDE,
+    NOT,
     NEGATE,
     RETURN,
 };
 
-pub const Value = f64;
+pub const ValueTypeTag = enum { boolean, number, nil };
+
+pub const Value = union(ValueTypeTag) {
+    boolean: bool,
+    number: f64,
+    nil: void,
+
+    pub fn boolVal(self: Value) bool {
+        return switch (self) {
+            .nil => false,
+            .boolean => |v| v,
+            else => unreachable,
+        };
+    }
+};
 
 pub fn printValue(value: Value) void {
     std.debug.print("{}", .{value});

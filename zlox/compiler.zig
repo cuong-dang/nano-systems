@@ -2,10 +2,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Chunk = @import("./chunk.zig").Chunk;
+const OpCode = @import("./chunk.zig").OpCode;
+const Value = @import("./chunk.zig").Value;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
-const OpCode = @import("./chunk.zig").OpCode;
 const debug = @import("./debug.zig");
 
 pub const Compiler = struct {
@@ -64,6 +65,15 @@ pub const Compiler = struct {
         }
     }
 
+    fn literal(self: *Compiler) void {
+        switch (self.parser.previous.type) {
+            .FALSE => self.emitByte(@intFromEnum(OpCode.FALSE)),
+            .TRUE => self.emitByte(@intFromEnum(OpCode.TRUE)),
+            .NIL => self.emitByte(@intFromEnum(OpCode.NIL)),
+            else => unreachable,
+        }
+    }
+
     fn expression(self: *Compiler) void {
         self.parsePrecedence(.ASSIGNMENT);
     }
@@ -78,7 +88,7 @@ pub const Compiler = struct {
             self.parser.hadError = true;
             return;
         };
-        self.emitConstant(value) catch {
+        self.emitConstant(Value{ .number = value }) catch {
             self.parser.hadError = true;
             return;
         };
@@ -92,6 +102,7 @@ pub const Compiler = struct {
 
         // Emit the operator instruction.
         switch (operatorType) {
+            .BANG => self.emitByte(@intFromEnum(OpCode.NOT)),
             .MINUS => self.emitByte(@intFromEnum(OpCode.NEGATE)),
             else => unreachable,
         }
@@ -130,11 +141,11 @@ pub const Compiler = struct {
         self.emitByte(@intFromEnum(OpCode.RETURN));
     }
 
-    fn emitConstant(self: *Compiler, value: f64) !void {
+    fn emitConstant(self: *Compiler, value: Value) !void {
         self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(value));
     }
 
-    fn makeConstant(self: *Compiler, value: f64) !u8 {
+    fn makeConstant(self: *Compiler, value: Value) !u8 {
         const constant = try self.chunk.addConstant(value);
         if (constant > std.math.maxInt(u8)) {
             self.error_("Too many constants in one chunk.");
@@ -214,7 +225,7 @@ const rules = blk: {
     r[@intFromEnum(TokenType.SLASH)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .FACTOR };
     r[@intFromEnum(TokenType.STAR)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .FACTOR };
 
-    r[@intFromEnum(TokenType.BANG)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.BANG)] = .{ .prefix = Compiler.unary, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.BANG_EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
 
     r[@intFromEnum(TokenType.EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
@@ -233,17 +244,17 @@ const rules = blk: {
     r[@intFromEnum(TokenType.AND)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.CLASS)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.ELSE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.FALSE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.FALSE)] = .{ .prefix = Compiler.literal, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.FOR)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.FUN)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.IF)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.NIL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.NIL)] = .{ .prefix = Compiler.literal, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.OR)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.PRINT)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.RETURN)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.SUPER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.THIS)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.TRUE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.TRUE)] = .{ .prefix = Compiler.literal, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.VAR)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.WHILE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
 

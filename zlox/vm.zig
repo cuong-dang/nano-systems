@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./chunk.zig").Value;
+const ValueTypeTag = @import("./chunk.zig").ValueTypeTag;
 const Compiler = @import("./compiler.zig").Compiler;
 const printValue = @import("./chunk.zig").printValue;
 const debug = @import("./debug.zig");
@@ -25,7 +26,7 @@ pub const VM = struct {
         var chunk = Chunk.init(self.gpa);
         defer chunk.deinit(self.gpa);
 
-        self.stackTop = &self.stack;
+        self.resetStack();
 
         if (!(Compiler.compile(source, &chunk))) {
             return .INTERPRET_COMPILE_ERROR;
@@ -62,19 +63,55 @@ pub const VM = struct {
                     const constant = self.read_constant();
                     self.push(constant);
                 },
-                .ADD => self.push(self.pop() + self.pop()),
+                .NIL => self.push(.{ .nil = void{} }),
+                .TRUE => self.push(.{ .boolean = true }),
+                .FALSE => self.push(.{ .boolean = false }),
+                .ADD => {
+                    if (!self.ensureBinaryNumbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .number = self.pop().number + self.pop().number });
+                },
                 .SUBTRACT => {
-                    const b = self.pop();
-                    const a = self.pop();
-                    self.push(a - b);
+                    if (!self.ensureBinaryNumbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    const b = self.pop().number;
+                    const a = self.pop().number;
+                    self.push(.{ .number = a - b });
                 },
-                .MULTIPLY => self.push(self.pop() * self.pop()),
+                .MULTIPLY => {
+                    if (!self.ensureBinaryNumbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .number = self.pop().number * self.pop().number });
+                },
                 .DIVIDE => {
-                    const b = self.pop();
-                    const a = self.pop();
-                    self.push(a / b);
+                    if (!self.ensureBinaryNumbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    const b = self.pop().number;
+                    const a = self.pop().number;
+                    self.push(.{ .number = a / b });
                 },
-                .NEGATE => self.push(-self.pop()),
+                .NOT => {
+                    if (!self.ensureBoolish()) {
+                        self.runtimeError("Operand must be a bool or nil.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .boolean = !Value.boolVal(self.pop()) });
+                },
+                .NEGATE => {
+                    if (!self.ensureNumber()) {
+                        self.runtimeError("Operand must be a number.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .number = -self.pop().number });
+                },
                 .RETURN => {
                     return .INTERPRET_OK;
                 },
@@ -100,6 +137,40 @@ pub const VM = struct {
     fn pop(self: *VM) Value {
         self.stackTop -= 1;
         return self.stackTop[0];
+    }
+
+    fn peek(self: *const VM, distance: usize) Value {
+        return (self.stackTop - 1 - distance)[0];
+    }
+
+    fn ensureNumber(self: *const VM) bool {
+        return self.ensureValueType(0, ValueTypeTag.number);
+    }
+
+    fn ensureBinaryNumbers(self: *const VM) bool {
+        return self.ensureValueType(0, ValueTypeTag.number) and self.ensureValueType(1, ValueTypeTag.number);
+    }
+
+    fn ensureBoolish(self: *const VM) bool {
+        return self.ensureValueType(0, ValueTypeTag.boolean) or self.ensureValueType(0, ValueTypeTag.nil);
+    }
+
+    fn ensureValueType(self: *const VM, distance: usize, tag: ValueTypeTag) bool {
+        return @as(ValueTypeTag, self.peek(distance)) == tag;
+    }
+
+    fn resetStack(self: *VM) void {
+        self.stackTop = &self.stack;
+    }
+
+    fn runtimeError(self: *VM, comptime format: []const u8, args: anytype) void {
+        std.debug.print(format, args);
+        std.debug.print("\n", .{});
+
+        const instruction = self.ip - self.chunk.code() - 1;
+        const line = self.chunk.lineOf(instruction);
+        std.debug.print("[line {}] in script\n", .{line});
+        self.resetStack();
     }
 };
 
