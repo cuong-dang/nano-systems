@@ -8,7 +8,6 @@ const VM = @import("./vm.zig").VM;
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.gpa);
     var vm: VM = .init(init.gpa);
-    vm.resetStack();
 
     if (args.len == 1) {
         try repl(&vm, init.io);
@@ -28,7 +27,7 @@ fn repl(vm: *VM, io: std.Io) !void {
     while (true) {
         try std.Io.File.stdout().writeStreamingAll(io, "> ");
         if (try stdin.takeDelimiter('\n')) |line| {
-            _ = try vm.interpret(line);
+            _ = vm.interpret(line);
         }
     }
 }

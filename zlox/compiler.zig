@@ -12,21 +12,17 @@ pub const Compiler = struct {
     scanner: Scanner,
     parser: Parser,
     chunk: *Chunk,
-    gpa: std.mem.Allocator,
 
-    pub fn init(gpa: std.mem.Allocator) Compiler {
-        return .{ .scanner = undefined, .parser = .init(), .chunk = undefined, .gpa = gpa };
-    }
-
-    pub fn compile(self: *Compiler, source: []const u8, chunk: *Chunk) !bool {
+    pub fn compile(source: []const u8, chunk: *Chunk) bool {
+        var self = Compiler{ .scanner = undefined, .parser = .init(), .chunk = undefined };
         self.scanner = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
         self.chunk = chunk;
         self.advance();
-        try self.expression();
+        self.expression();
         self.consume(.EOF, "Expect end of expression.");
-        try self.end();
+        self.end();
         return !self.parser.hadError;
     }
 
@@ -34,104 +30,112 @@ pub const Compiler = struct {
         self.parser.previous = self.parser.current;
         while (true) {
             self.parser.current = self.scanner.scanToken();
-            if (self.parser.current.tokenType != .ERROR) break;
+            if (self.parser.current.type != .ERROR) break;
             self.errorAtCurrent(self.parser.current.lexeme);
         }
     }
 
     fn consume(self: *Compiler, tokenType: TokenType, message: []const u8) void {
-        if (self.parser.current.tokenType == tokenType) {
+        if (self.parser.current.type == tokenType) {
             self.advance();
             return;
         }
         self.errorAtCurrent(message);
     }
 
-    fn end(self: *Compiler) !void {
-        try self.emitReturn();
+    fn end(self: *Compiler) void {
+        self.emitReturn();
         if (builtin.mode == .Debug and !self.parser.hadError) {
             debug.disassembleChunk(self.chunk, "code");
         }
     }
 
-    fn binary(self: *Compiler) !void {
-        const operatorType = self.parser.previous.tokenType;
+    fn binary(self: *Compiler) void {
+        const operatorType = self.parser.previous.type;
         const rule = getRule(operatorType);
-        try self.parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
+        self.parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
 
         switch (operatorType) {
-            .PLUS => try self.emitByte(@intFromEnum(OpCode.ADD)),
-            .MINUS => try self.emitByte(@intFromEnum(OpCode.SUBTRACT)),
-            .STAR => try self.emitByte(@intFromEnum(OpCode.MULTIPLY)),
-            .SLASH => try self.emitByte(@intFromEnum(OpCode.DIVIDE)),
+            .PLUS => self.emitByte(@intFromEnum(OpCode.ADD)),
+            .MINUS => self.emitByte(@intFromEnum(OpCode.SUBTRACT)),
+            .STAR => self.emitByte(@intFromEnum(OpCode.MULTIPLY)),
+            .SLASH => self.emitByte(@intFromEnum(OpCode.DIVIDE)),
             else => unreachable,
         }
     }
 
-    fn expression(self: *Compiler) !void {
-        try self.parsePrecedence(.ASSIGNMENT);
+    fn expression(self: *Compiler) void {
+        self.parsePrecedence(.ASSIGNMENT);
     }
 
-    fn grouping(self: *Compiler) !void {
-        try self.expression();
+    fn grouping(self: *Compiler) void {
+        self.expression();
         self.consume(.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    fn number(self: *Compiler) !void {
-        const value = try std.fmt.parseFloat(f64, self.parser.previous.lexeme);
-        try self.emitConstant(value);
+    fn number(self: *Compiler) void {
+        const value = std.fmt.parseFloat(f64, self.parser.previous.lexeme) catch {
+            self.parser.hadError = true;
+            return;
+        };
+        self.emitConstant(value) catch {
+            self.parser.hadError = true;
+            return;
+        };
     }
 
-    fn unary(self: *Compiler) !void {
-        const operatorType = self.parser.previous.tokenType;
+    fn unary(self: *Compiler) void {
+        const operatorType = self.parser.previous.type;
 
         // Compile the operand.
-        try self.parsePrecedence(.UNARY);
+        self.parsePrecedence(.UNARY);
 
         // Emit the operator instruction.
         switch (operatorType) {
-            .MINUS => try self.emitByte(@intFromEnum(OpCode.NEGATE)),
+            .MINUS => self.emitByte(@intFromEnum(OpCode.NEGATE)),
             else => unreachable,
         }
     }
 
-    fn parsePrecedence(self: *Compiler, precedence: Precedence) !void {
+    fn parsePrecedence(self: *Compiler, precedence: Precedence) void {
         self.advance();
-        if (getRule(self.parser.previous.tokenType).prefix) |prefixRule| {
-            try prefixRule(self);
+        if (getRule(self.parser.previous.type).prefix) |prefixRule| {
+            prefixRule(self);
         } else {
             self.error_("Expected expression.");
         }
 
-        while (@intFromEnum(precedence) <= @intFromEnum(getRule(self.parser.current.tokenType).precedence)) {
+        while (@intFromEnum(precedence) <= @intFromEnum(getRule(self.parser.current.type).precedence)) {
             self.advance();
-            if (getRule(self.parser.previous.tokenType).infix) |infixRule| {
-                try infixRule(self);
+            if (getRule(self.parser.previous.type).infix) |infixRule| {
+                infixRule(self);
             } else {
                 unreachable;
             }
         }
     }
 
-    fn emitByte(self: *Compiler, byte: u8) !void {
-        try self.chunk.write(self.gpa, byte, self.parser.previous.line);
+    fn emitByte(self: *Compiler, byte: u8) void {
+        self.chunk.write(byte, self.parser.previous.line) catch {
+            self.parser.hadError = true;
+        };
     }
 
-    fn emitBytes(self: *Compiler, byte1: u8, byte2: u8) !void {
-        try self.emitByte(byte1);
-        try self.emitByte(byte2);
+    fn emitBytes(self: *Compiler, byte1: u8, byte2: u8) void {
+        self.emitByte(byte1);
+        self.emitByte(byte2);
     }
 
-    fn emitReturn(self: *Compiler) !void {
-        try self.emitByte(@intFromEnum(OpCode.RETURN));
+    fn emitReturn(self: *Compiler) void {
+        self.emitByte(@intFromEnum(OpCode.RETURN));
     }
 
     fn emitConstant(self: *Compiler, value: f64) !void {
-        try self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(value));
+        self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(value));
     }
 
     fn makeConstant(self: *Compiler, value: f64) !u8 {
-        const constant = try self.chunk.addConstant(self.gpa, value);
+        const constant = try self.chunk.addConstant(value);
         if (constant > std.math.maxInt(u8)) {
             self.error_("Too many constants in one chunk.");
             return 0;
@@ -151,9 +155,9 @@ pub const Compiler = struct {
         self.parser.panicMode = true;
         std.debug.print("[line {d}] Error", .{token.line});
 
-        if (token.tokenType == .EOF) {
+        if (token.type == .EOF) {
             std.debug.print(" at end", .{});
-        } else if (token.tokenType == .ERROR) {
+        } else if (token.type == .ERROR) {
             // Nothing.
         } else {
             std.debug.print(" at '{s}'", .{token.lexeme});
@@ -189,7 +193,9 @@ const Precedence = enum {
     PRIMARY,
 };
 
-const ParseRule = struct { prefix: ?*const fn (*Compiler) anyerror!void, infix: ?*const fn (*Compiler) anyerror!void, precedence: Precedence };
+const ParseFn = *const fn (*Compiler) void;
+
+const ParseRule = struct { prefix: ?ParseFn, infix: ?ParseFn, precedence: Precedence };
 
 const rules = blk: {
     var r: [@intFromEnum(TokenType.EOF) + 1]ParseRule = undefined;

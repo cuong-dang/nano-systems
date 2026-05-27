@@ -69,11 +69,11 @@ pub const Scanner = struct {
     }
 
     fn makeToken(self: *const Scanner, tokenType: TokenType) Token {
-        return .{ .tokenType = tokenType, .lexeme = self.source[self.start..self.current], .line = self.line };
+        return .{ .type = tokenType, .lexeme = self.source[self.start..self.current], .line = self.line };
     }
 
     fn errorToken(self: *const Scanner, message: []const u8) Token {
-        return .{ .tokenType = .ERROR, .lexeme = message, .line = self.line };
+        return .{ .type = .ERROR, .lexeme = message, .line = self.line };
     }
 
     fn skipWhitespace(self: *Scanner) void {
@@ -173,7 +173,7 @@ pub const Scanner = struct {
 };
 
 pub const Token = struct {
-    tokenType: TokenType,
+    type: TokenType,
     lexeme: []const u8,
     line: usize,
 };

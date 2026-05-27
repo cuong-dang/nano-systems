@@ -4,9 +4,10 @@ pub const Chunk = struct {
     _code: std.ArrayList(u8),
     constants: std.ArrayList(Value),
     lineInfo: std.ArrayList(LineInfo),
+    gpa: std.mem.Allocator,
 
-    pub fn init() Chunk {
-        return .{ ._code = .empty, .constants = .empty, .lineInfo = .empty };
+    pub fn init(gpa: std.mem.Allocator) Chunk {
+        return .{ ._code = .empty, .constants = .empty, .lineInfo = .empty, .gpa = gpa };
     }
 
     pub fn deinit(self: *Chunk, gpa: std.mem.Allocator) void {
@@ -41,17 +42,17 @@ pub const Chunk = struct {
         return self._code.items.ptr;
     }
 
-    pub fn write(self: *Chunk, gpa: std.mem.Allocator, byte: u8, line: usize) !void {
-        try self._code.append(gpa, byte);
+    pub fn write(self: *Chunk, byte: u8, line: usize) !void {
+        try self._code.append(self.gpa, byte);
         if (self.lineInfo.items.len == 0 or
             self.lineInfo.items[self.lineInfo.items.len - 1].line != line)
         {
-            try self.lineInfo.append(gpa, .{ .offset = self._code.items.len - 1, .line = line });
+            try self.lineInfo.append(self.gpa, .{ .offset = self._code.items.len - 1, .line = line });
         }
     }
 
-    pub fn addConstant(self: *Chunk, gpa: std.mem.Allocator, value: Value) !usize {
-        try self.constants.append(gpa, value);
+    pub fn addConstant(self: *Chunk, value: Value) !usize {
+        try self.constants.append(self.gpa, value);
         return self.constants.items.len - 1;
     }
 };
