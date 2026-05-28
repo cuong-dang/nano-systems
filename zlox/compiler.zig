@@ -3,19 +3,21 @@ const builtin = @import("builtin");
 
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
-const Value = @import("./chunk.zig").Value;
+const value = @import("./value.zig");
+const Value = @import("./value.zig").Value;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
 const debug = @import("./debug.zig");
 
 pub const Compiler = struct {
+    gpa: std.mem.Allocator,
     scanner: Scanner,
     parser: Parser,
     chunk: *Chunk,
 
-    pub fn compile(source: []const u8, chunk: *Chunk) bool {
-        var self = Compiler{ .scanner = undefined, .parser = .init(), .chunk = undefined };
+    pub fn compile(gpa: std.mem.Allocator, source: []const u8, chunk: *Chunk) bool {
+        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .chunk = undefined };
         self.scanner = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
@@ -90,11 +92,22 @@ pub const Compiler = struct {
     }
 
     fn number(self: *Compiler) void {
-        const value = std.fmt.parseFloat(f64, self.parser.previous.lexeme) catch {
+        const v = std.fmt.parseFloat(f64, self.parser.previous.lexeme) catch {
             self.parser.hadError = true;
             return;
         };
-        self.emitConstant(Value{ .number = value }) catch {
+        self.emitConstant(.{ .number = v }) catch {
+            self.parser.hadError = true;
+            return;
+        };
+    }
+
+    fn string(self: *Compiler) void {
+        const obj = value.makeString(self.gpa, self.parser.previous.lexeme) catch {
+            self.parser.hadError = true;
+            return;
+        };
+        self.emitConstant(.{ .obj = obj }) catch {
             self.parser.hadError = true;
             return;
         };
@@ -147,12 +160,12 @@ pub const Compiler = struct {
         self.emitByte(@intFromEnum(OpCode.RETURN));
     }
 
-    fn emitConstant(self: *Compiler, value: Value) !void {
-        self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(value));
+    fn emitConstant(self: *Compiler, v: Value) !void {
+        self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(v));
     }
 
-    fn makeConstant(self: *Compiler, value: Value) !u8 {
-        const constant = try self.chunk.addConstant(value);
+    fn makeConstant(self: *Compiler, v: Value) !u8 {
+        const constant = try self.chunk.addConstant(v);
         if (constant > std.math.maxInt(u8)) {
             self.error_("Too many constants in one chunk.");
             return 0;
@@ -244,7 +257,7 @@ const rules = blk: {
     r[@intFromEnum(TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
 
     r[@intFromEnum(TokenType.IDENTIFIER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.STRING)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.STRING)] = .{ .prefix = Compiler.string, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.NUMBER)] = .{ .prefix = Compiler.number, .infix = null, .precedence = .NONE };
 
     r[@intFromEnum(TokenType.AND)] = .{ .prefix = null, .infix = null, .precedence = .NONE };

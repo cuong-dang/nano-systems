@@ -3,10 +3,12 @@ const builtin = @import("builtin");
 
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
-const Value = @import("./chunk.zig").Value;
-const ValueTypeTag = @import("./chunk.zig").ValueTypeTag;
+const Value = @import("./value.zig").Value;
+const ValueTypeTag = @import("./value.zig").ValueTypeTag;
+const value = @import("./value.zig");
+const ObjTypeTag = @import("./value.zig").ObjTypeTag;
+const printValue = @import("./value.zig").printValue;
 const Compiler = @import("./compiler.zig").Compiler;
-const printValue = @import("./chunk.zig").printValue;
 const debug = @import("./debug.zig");
 
 const stackMax = 256;
@@ -28,7 +30,7 @@ pub const VM = struct {
 
         self.resetStack();
 
-        if (!(Compiler.compile(source, &chunk))) {
+        if (!(Compiler.compile(self.gpa, source, &chunk))) {
             return .INTERPRET_COMPILE_ERROR;
         }
 
@@ -82,11 +84,20 @@ pub const VM = struct {
                     self.push(.{ .boolean = self.pop().number > self.pop().number });
                 },
                 .ADD => {
-                    if (!self.ensure2Numbers()) {
-                        self.runtimeError("Operands must be numbers.", .{});
+                    if (!(self.ensure2Numbers() or self.ensure2Strings())) {
+                        self.runtimeError("Operands must be two numbers or two strings.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
-                    self.push(.{ .number = self.pop().number + self.pop().number });
+                    const b = self.pop();
+                    const a = self.pop();
+                    switch (a) {
+                        .number => self.push(.{ .number = self.pop().number + self.pop().number }),
+                        .obj => {
+                            const obj = value.concatStrings(self.gpa, a.obj.string, b.obj.string) catch return .INTERPRET_RUNTIME_ERROR;
+                            self.push(.{ .obj = obj });
+                        },
+                        else => unreachable,
+                    }
                 },
                 .SUBTRACT => {
                     if (!self.ensure2Numbers()) {
@@ -144,8 +155,8 @@ pub const VM = struct {
         return self.chunk.getConstant(self.read_byte());
     }
 
-    fn push(self: *VM, value: Value) void {
-        self.stackTop[0] = value;
+    fn push(self: *VM, v: Value) void {
+        self.stackTop[0] = v;
         self.stackTop += 1;
     }
 
@@ -166,12 +177,20 @@ pub const VM = struct {
         return self.ensureValueType(0, ValueTypeTag.number) and self.ensureValueType(1, ValueTypeTag.number);
     }
 
+    fn ensure2Strings(self: *const VM) bool {
+        return self.ensureObjType(0, ObjTypeTag.string) and self.ensureObjType(1, ObjTypeTag.string);
+    }
+
     fn ensureBoolish(self: *const VM) bool {
         return self.ensureValueType(0, ValueTypeTag.boolean) or self.ensureValueType(0, ValueTypeTag.nil);
     }
 
     fn ensureValueType(self: *const VM, distance: usize, tag: ValueTypeTag) bool {
         return @as(ValueTypeTag, self.peek(distance)) == tag;
+    }
+
+    fn ensureObjType(self: *const VM, distance: usize, tag: ObjTypeTag) bool {
+        return self.ensureValueType(distance, ValueTypeTag.obj) and @as(ObjTypeTag, self.peek(distance).obj.*) == tag;
     }
 
     fn resetStack(self: *VM) void {

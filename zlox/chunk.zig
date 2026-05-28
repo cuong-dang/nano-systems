@@ -1,5 +1,9 @@
 const std = @import("std");
 
+const Value = @import("./value.zig").Value;
+const Obj = @import("./value.zig").Obj;
+const ObjTypeTag = @import("./value.zig").ObjTypeTag;
+
 pub const Chunk = struct {
     _code: std.ArrayList(u8),
     constants: std.ArrayList(Value),
@@ -73,35 +77,6 @@ pub const OpCode = enum {
     NEGATE,
     RETURN,
 };
-
-pub const ValueTypeTag = enum { boolean, number, nil };
-
-pub const Value = union(ValueTypeTag) {
-    boolean: bool,
-    number: f64,
-    nil: void,
-
-    pub fn asBool(self: Value) bool {
-        return switch (self) {
-            .nil => false,
-            .boolean => |v| v,
-            else => unreachable,
-        };
-    }
-
-    pub fn equals(self: Value, b: Value) bool {
-        if (@as(ValueTypeTag, self) != @as(ValueTypeTag, b)) return false;
-        return switch (self) {
-            .nil => true,
-            .boolean => self.boolean == b.boolean,
-            .number => self.number == b.number,
-        };
-    }
-};
-
-pub fn printValue(value: Value) void {
-    std.debug.print("{}", .{value});
-}
 
 const LineInfo = struct {
     offset: usize,
