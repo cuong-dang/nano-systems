@@ -61,6 +61,12 @@ pub const Compiler = struct {
             .MINUS => self.emitByte(@intFromEnum(OpCode.SUBTRACT)),
             .STAR => self.emitByte(@intFromEnum(OpCode.MULTIPLY)),
             .SLASH => self.emitByte(@intFromEnum(OpCode.DIVIDE)),
+            .BANG_EQUAL => self.emitBytes(@intFromEnum(OpCode.EQUAL), @intFromEnum(OpCode.NOT)),
+            .EQUAL_EQUAL => self.emitByte(@intFromEnum(OpCode.EQUAL)),
+            .GREATER => self.emitByte(@intFromEnum(OpCode.GREATER)),
+            .GREATER_EQUAL => self.emitBytes(@intFromEnum(OpCode.LESS), @intFromEnum(OpCode.NOT)),
+            .LESS => self.emitByte(@intFromEnum(OpCode.LESS)),
+            .LESS_EQUAL => self.emitBytes(@intFromEnum(OpCode.GREATER), @intFromEnum(OpCode.NOT)),
             else => unreachable,
         }
     }
@@ -226,16 +232,16 @@ const rules = blk: {
     r[@intFromEnum(TokenType.STAR)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .FACTOR };
 
     r[@intFromEnum(TokenType.BANG)] = .{ .prefix = Compiler.unary, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.BANG_EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.BANG_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .EQUALITY };
 
     r[@intFromEnum(TokenType.EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.EQUAL_EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.EQUAL_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .EQUALITY };
 
-    r[@intFromEnum(TokenType.GREATER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.GREATER_EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.GREATER)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
+    r[@intFromEnum(TokenType.GREATER_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
 
-    r[@intFromEnum(TokenType.LESS)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.LESS)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
+    r[@intFromEnum(TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
 
     r[@intFromEnum(TokenType.IDENTIFIER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.STRING)] = .{ .prefix = null, .infix = null, .precedence = .NONE };

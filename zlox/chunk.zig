@@ -62,6 +62,9 @@ pub const OpCode = enum {
     NIL,
     TRUE,
     FALSE,
+    EQUAL,
+    GREATER,
+    LESS,
     ADD,
     SUBTRACT,
     MULTIPLY,
@@ -78,11 +81,20 @@ pub const Value = union(ValueTypeTag) {
     number: f64,
     nil: void,
 
-    pub fn boolVal(self: Value) bool {
+    pub fn asBool(self: Value) bool {
         return switch (self) {
             .nil => false,
             .boolean => |v| v,
             else => unreachable,
+        };
+    }
+
+    pub fn equals(self: Value, b: Value) bool {
+        if (@as(ValueTypeTag, self) != @as(ValueTypeTag, b)) return false;
+        return switch (self) {
+            .nil => true,
+            .boolean => self.boolean == b.boolean,
+            .number => self.number == b.number,
         };
     }
 };

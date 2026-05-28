@@ -66,15 +66,30 @@ pub const VM = struct {
                 .NIL => self.push(.{ .nil = void{} }),
                 .TRUE => self.push(.{ .boolean = true }),
                 .FALSE => self.push(.{ .boolean = false }),
+                .EQUAL => self.push(.{ .boolean = self.pop().equals(self.pop()) }),
+                .GREATER => {
+                    if (!self.ensure2Numbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .boolean = self.pop().number < self.pop().number });
+                },
+                .LESS => {
+                    if (!self.ensure2Numbers()) {
+                        self.runtimeError("Operands must be numbers.", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(.{ .boolean = self.pop().number > self.pop().number });
+                },
                 .ADD => {
-                    if (!self.ensureBinaryNumbers()) {
+                    if (!self.ensure2Numbers()) {
                         self.runtimeError("Operands must be numbers.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
                     self.push(.{ .number = self.pop().number + self.pop().number });
                 },
                 .SUBTRACT => {
-                    if (!self.ensureBinaryNumbers()) {
+                    if (!self.ensure2Numbers()) {
                         self.runtimeError("Operands must be numbers.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
@@ -83,14 +98,14 @@ pub const VM = struct {
                     self.push(.{ .number = a - b });
                 },
                 .MULTIPLY => {
-                    if (!self.ensureBinaryNumbers()) {
+                    if (!self.ensure2Numbers()) {
                         self.runtimeError("Operands must be numbers.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
                     self.push(.{ .number = self.pop().number * self.pop().number });
                 },
                 .DIVIDE => {
-                    if (!self.ensureBinaryNumbers()) {
+                    if (!self.ensure2Numbers()) {
                         self.runtimeError("Operands must be numbers.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
@@ -103,7 +118,7 @@ pub const VM = struct {
                         self.runtimeError("Operand must be a bool or nil.", .{});
                         return .INTERPRET_RUNTIME_ERROR;
                     }
-                    self.push(.{ .boolean = !Value.boolVal(self.pop()) });
+                    self.push(.{ .boolean = !self.pop().asBool() });
                 },
                 .NEGATE => {
                     if (!self.ensureNumber()) {
@@ -147,7 +162,7 @@ pub const VM = struct {
         return self.ensureValueType(0, ValueTypeTag.number);
     }
 
-    fn ensureBinaryNumbers(self: *const VM) bool {
+    fn ensure2Numbers(self: *const VM) bool {
         return self.ensureValueType(0, ValueTypeTag.number) and self.ensureValueType(1, ValueTypeTag.number);
     }
 
