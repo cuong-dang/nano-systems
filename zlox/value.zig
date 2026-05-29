@@ -42,11 +42,15 @@ pub const Obj = struct {
     data: ObjData,
     next: ?*Obj,
 
+    pub fn deinit(self: *Obj, gpa: std.mem.Allocator) void {
+        switch (self.data) {
+            .string => |s| gpa.free(s),
+        }
+        gpa.destroy(self);
+    }
+
     pub fn fromString(gpa: std.mem.Allocator, s: []const u8, vm: *VM) !*Obj {
-        var obj = try gpa.create(Obj);
-        obj.data.string = try gpa.dupe(u8, s[1 .. s.len - 1]);
-        vm.addObject(obj);
-        return obj;
+        return try fromStrings(gpa, &[_][]const u8{s[1 .. s.len - 1]}, vm);
     }
 
     pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8, vm: *VM) !*Obj {
@@ -61,6 +65,7 @@ pub const Obj = struct {
             @memcpy(obj.data.string[len .. len + s.len], s);
             len += s.len;
         }
+
         vm.addObject(obj);
         return obj;
     }

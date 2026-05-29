@@ -32,11 +32,7 @@ pub const VM = struct {
         var obj: ?*Obj = self.objects;
         while (obj != null) {
             const next = obj.?.next;
-            // Free object.
-            switch (obj.?.data) {
-                .string => |s| self.gpa.free(s),
-            }
-            self.gpa.destroy(obj.?);
+            obj.?.deinit(self.gpa);
             obj = next;
         }
     }
