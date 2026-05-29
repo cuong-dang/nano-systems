@@ -18,24 +18,40 @@ pub const VM = struct {
     ip: [*]const u8,
     stack: [stackMax]Value,
     stackTop: [*]Value,
+    objects: ?*Obj,
     gpa: std.mem.Allocator,
 
     pub fn init(gpa: std.mem.Allocator) VM {
-        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .gpa = gpa };
+        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .gpa = gpa };
+    }
+
+    pub fn deinit(self: *VM) void {
+        self.chunk.deinit(self.gpa);
+        self.gpa.destroy(self.chunk);
+        // Free objects.
+        var obj: ?*Obj = self.objects;
+        while (obj != null) {
+            const next = obj.?.next;
+            // Free object.
+            switch (obj.?.data) {
+                .string => |s| self.gpa.free(s),
+            }
+            self.gpa.destroy(obj.?);
+            obj = next;
+        }
     }
 
     pub fn interpret(self: *VM, source: []const u8) InterpretResult {
-        var chunk = Chunk.init(self.gpa);
-        defer chunk.deinit(self.gpa);
+        self.chunk = self.gpa.create(Chunk) catch return .INTERPRET_RUNTIME_ERROR;
+        self.chunk.* = Chunk.init(self.gpa);
 
         self.resetStack();
 
-        if (!(Compiler.compile(self.gpa, source, &chunk))) {
+        if (!(Compiler.compile(self.gpa, source, self))) {
             return .INTERPRET_COMPILE_ERROR;
         }
 
-        self.chunk = &chunk;
-        self.ip = chunk.code();
+        self.ip = self.chunk.code();
 
         return self.run();
     }
@@ -91,9 +107,9 @@ pub const VM = struct {
                     const b = self.pop();
                     const a = self.pop();
                     switch (a) {
-                        .number => self.push(.{ .number = self.pop().number + self.pop().number }),
+                        .number => self.push(.{ .number = a.number + b.number }),
                         .obj => {
-                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.string, b.obj.string }) catch return .INTERPRET_RUNTIME_ERROR;
+                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.data.string, b.obj.data.string }, self) catch return .INTERPRET_RUNTIME_ERROR;
                             self.push(.{ .obj = obj });
                         },
                         else => unreachable,
@@ -145,6 +161,11 @@ pub const VM = struct {
         }
     }
 
+    pub fn addObject(self: *VM, obj: *Obj) void {
+        obj.next = self.objects;
+        self.objects = obj;
+    }
+
     fn read_byte(self: *VM) u8 {
         const byte = self.ip[0];
         self.ip += 1;
@@ -190,7 +211,7 @@ pub const VM = struct {
     }
 
     fn ensureObjType(self: *const VM, distance: usize, tag: ObjTypeTag) bool {
-        return self.ensureValueType(distance, ValueTypeTag.obj) and @as(ObjTypeTag, self.peek(distance).obj.*) == tag;
+        return self.ensureValueType(distance, ValueTypeTag.obj) and @as(ObjTypeTag, self.peek(distance).obj.data) == tag;
     }
 
     fn resetStack(self: *VM) void {

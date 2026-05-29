@@ -8,20 +8,20 @@ const Obj = @import("./value.zig").Obj;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
+const VM = @import("./vm.zig").VM;
 const debug = @import("./debug.zig");
 
 pub const Compiler = struct {
     gpa: std.mem.Allocator,
     scanner: Scanner,
     parser: Parser,
-    chunk: *Chunk,
+    vm: *VM,
 
-    pub fn compile(gpa: std.mem.Allocator, source: []const u8, chunk: *Chunk) bool {
-        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .chunk = undefined };
+    pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) bool {
+        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .vm = vm };
         self.scanner = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
-        self.chunk = chunk;
         self.advance();
         self.expression();
         self.consume(.EOF, "Expect end of expression.");
@@ -49,7 +49,7 @@ pub const Compiler = struct {
     fn end(self: *Compiler) void {
         self.emitReturn();
         if (builtin.mode == .Debug and !self.parser.hadError) {
-            debug.disassembleChunk(self.chunk, "code");
+            debug.disassembleChunk(self.vm.chunk, "code");
         }
     }
 
@@ -103,7 +103,7 @@ pub const Compiler = struct {
     }
 
     fn string(self: *Compiler) void {
-        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme) catch {
+        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme, self.vm) catch {
             self.parser.hadError = true;
             return;
         };
@@ -146,7 +146,7 @@ pub const Compiler = struct {
     }
 
     fn emitByte(self: *Compiler, byte: u8) void {
-        self.chunk.write(byte, self.parser.previous.line) catch {
+        self.vm.chunk.write(byte, self.parser.previous.line) catch {
             self.parser.hadError = true;
         };
     }
@@ -165,7 +165,7 @@ pub const Compiler = struct {
     }
 
     fn makeConstant(self: *Compiler, v: Value) !u8 {
-        const constant = try self.chunk.addConstant(v);
+        const constant = try self.vm.chunk.addConstant(v);
         if (constant > std.math.maxInt(u8)) {
             self.error_("Too many constants in one chunk.");
             return 0;

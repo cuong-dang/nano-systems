@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const VM = @import("./vm.zig").VM;
+
 pub const ValueTypeTag = enum { boolean, number, obj, nil };
 
 pub const Value = union(ValueTypeTag) {
@@ -23,9 +25,9 @@ pub const Value = union(ValueTypeTag) {
             .boolean => self.boolean == b.boolean,
             .number => self.number == b.number,
             .obj => |v| {
-                if (@as(ObjTypeTag, self.obj.*) != @as(ObjTypeTag, b.obj.*)) return false;
-                switch (v.*) {
-                    .string => return std.mem.eql(u8, self.obj.string, b.obj.string),
+                if (@as(ObjTypeTag, self.obj.data) != @as(ObjTypeTag, b.obj.data)) return false;
+                switch (v.data) {
+                    .string => return std.mem.eql(u8, self.obj.data.string, b.obj.data.string),
                 }
             },
         };
@@ -34,34 +36,39 @@ pub const Value = union(ValueTypeTag) {
 
 pub const ObjTypeTag = enum { string };
 
-pub const Obj = union(ObjTypeTag) {
-    string: []u8,
+const ObjData = union(ObjTypeTag) { string: []u8 };
 
-    pub fn fromString(gpa: std.mem.Allocator, s: []const u8) !*Obj {
+pub const Obj = struct {
+    data: ObjData,
+    next: ?*Obj,
+
+    pub fn fromString(gpa: std.mem.Allocator, s: []const u8, vm: *VM) !*Obj {
         var obj = try gpa.create(Obj);
-        obj.string = try gpa.dupe(u8, s[1 .. s.len - 1]);
+        obj.data.string = try gpa.dupe(u8, s[1 .. s.len - 1]);
+        vm.addObject(obj);
         return obj;
     }
 
-    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8) !*Obj {
+    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8, vm: *VM) !*Obj {
         var obj = try gpa.create(Obj);
 
         var len: usize = 0;
         for (ss) |s| len += s.len;
-        obj.string = try gpa.alloc(u8, len);
+        obj.data.string = try gpa.alloc(u8, len);
 
         len = 0;
         for (ss) |s| {
-            @memcpy(obj.string[len .. len + s.len], s);
+            @memcpy(obj.data.string[len .. len + s.len], s);
             len += s.len;
         }
+        vm.addObject(obj);
         return obj;
     }
 };
 
 pub fn printValue(value: Value) void {
     switch (value) {
-        .obj => |v| switch (v.*) {
+        .obj => |v| switch (v.data) {
             .string => |s| std.debug.print("'{s}'", .{s}),
         },
         else => |v| std.debug.print("{}", .{v}),
