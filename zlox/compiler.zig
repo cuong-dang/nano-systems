@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
-const value = @import("./value.zig");
 const Value = @import("./value.zig").Value;
+const Obj = @import("./value.zig").Obj;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
@@ -103,7 +103,7 @@ pub const Compiler = struct {
     }
 
     fn string(self: *Compiler) void {
-        const obj = value.makeString(self.gpa, self.parser.previous.lexeme) catch {
+        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme) catch {
             self.parser.hadError = true;
             return;
         };

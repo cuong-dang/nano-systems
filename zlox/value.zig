@@ -32,6 +32,33 @@ pub const Value = union(ValueTypeTag) {
     }
 };
 
+pub const ObjTypeTag = enum { string };
+
+pub const Obj = union(ObjTypeTag) {
+    string: []u8,
+
+    pub fn fromString(gpa: std.mem.Allocator, s: []const u8) !*Obj {
+        var obj = try gpa.create(Obj);
+        obj.string = try gpa.dupe(u8, s[1 .. s.len - 1]);
+        return obj;
+    }
+
+    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8) !*Obj {
+        var obj = try gpa.create(Obj);
+
+        var len: usize = 0;
+        for (ss) |s| len += s.len;
+        obj.string = try gpa.alloc(u8, len);
+
+        len = 0;
+        for (ss) |s| {
+            @memcpy(obj.string[len .. len + s.len], s);
+            len += s.len;
+        }
+        return obj;
+    }
+};
+
 pub fn printValue(value: Value) void {
     switch (value) {
         .obj => |v| switch (v.*) {
@@ -39,24 +66,4 @@ pub fn printValue(value: Value) void {
         },
         else => |v| std.debug.print("{}", .{v}),
     }
-}
-
-pub const ObjTypeTag = enum { string };
-
-pub const Obj = union(ObjTypeTag) {
-    string: []u8,
-};
-
-pub fn makeString(gpa: std.mem.Allocator, s: []const u8) !*Obj {
-    var obj = try gpa.create(Obj);
-    obj.string = try gpa.dupe(u8, s[1 .. s.len - 1]);
-    return obj;
-}
-
-pub fn concatStrings(gpa: std.mem.Allocator, s1: []const u8, s2: []const u8) !*Obj {
-    var obj = try gpa.create(Obj);
-    obj.string = try gpa.alloc(u8, s1.len + s2.len);
-    @memcpy(obj.string[0..s1.len], s1);
-    @memcpy(obj.string[s1.len..], s2);
-    return obj;
 }

@@ -4,8 +4,8 @@ const builtin = @import("builtin");
 const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./value.zig").Value;
+const Obj = @import("./value.zig").Obj;
 const ValueTypeTag = @import("./value.zig").ValueTypeTag;
-const value = @import("./value.zig");
 const ObjTypeTag = @import("./value.zig").ObjTypeTag;
 const printValue = @import("./value.zig").printValue;
 const Compiler = @import("./compiler.zig").Compiler;
@@ -93,7 +93,7 @@ pub const VM = struct {
                     switch (a) {
                         .number => self.push(.{ .number = self.pop().number + self.pop().number }),
                         .obj => {
-                            const obj = value.concatStrings(self.gpa, a.obj.string, b.obj.string) catch return .INTERPRET_RUNTIME_ERROR;
+                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.string, b.obj.string }) catch return .INTERPRET_RUNTIME_ERROR;
                             self.push(.{ .obj = obj });
                         },
                         else => unreachable,
