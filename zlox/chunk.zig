@@ -66,6 +66,7 @@ pub const OpCode = enum {
     NIL,
     TRUE,
     FALSE,
+    POP,
     EQUAL,
     GREATER,
     LESS,
@@ -75,6 +76,7 @@ pub const OpCode = enum {
     DIVIDE,
     NOT,
     NEGATE,
+    PRINT,
     RETURN,
 };
 

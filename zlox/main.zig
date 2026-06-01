@@ -7,7 +7,7 @@ const VM = @import("./vm.zig").VM;
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.gpa);
-    var vm: VM = .init(init.gpa);
+    var vm: VM = .init(init.gpa, init.io);
     defer vm.deinit();
 
     if (args.len == 1) {

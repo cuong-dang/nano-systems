@@ -20,9 +20,10 @@ pub const VM = struct {
     stackTop: [*]Value,
     objects: ?*Obj,
     gpa: std.mem.Allocator,
+    io: std.Io,
 
-    pub fn init(gpa: std.mem.Allocator) VM {
-        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .gpa = gpa };
+    pub fn init(gpa: std.mem.Allocator, io: std.Io) VM {
+        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .gpa = gpa, .io = io };
     }
 
     pub fn deinit(self: *VM) void {
@@ -80,6 +81,7 @@ pub const VM = struct {
                 .NIL => self.push(.{ .nil = void{} }),
                 .TRUE => self.push(.{ .boolean = true }),
                 .FALSE => self.push(.{ .boolean = false }),
+                .POP => _ = self.pop(),
                 .EQUAL => self.push(.{ .boolean = self.pop().equals(self.pop()) }),
                 .GREATER => {
                     if (!self.ensure2Numbers()) {
@@ -149,6 +151,12 @@ pub const VM = struct {
                         return .INTERPRET_RUNTIME_ERROR;
                     }
                     self.push(.{ .number = -self.pop().number });
+                },
+                .PRINT => {
+                    var buf: [256]u8 = undefined;
+                    const s = self.pop().fmt(&buf) catch return .INTERPRET_RUNTIME_ERROR;
+                    std.Io.File.stdout().writeStreamingAll(self.io, s) catch return .INTERPRET_RUNTIME_ERROR;
+                    std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return .INTERPRET_RUNTIME_ERROR;
                 },
                 .RETURN => {
                     return .INTERPRET_OK;

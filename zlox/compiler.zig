@@ -23,11 +23,16 @@ pub const Compiler = struct {
         self.parser.hadError = false;
         self.parser.panicMode = false;
         self.advance();
-        self.expression();
-        self.consume(.EOF, "Expect end of expression.");
+
+        while (!self.match(.EOF)) {
+            self.declaration();
+        }
+
         self.end();
         return !self.parser.hadError;
     }
+
+    // Movements.
 
     fn advance(self: *Compiler) void {
         self.parser.previous = self.parser.current;
@@ -46,11 +51,51 @@ pub const Compiler = struct {
         self.errorAtCurrent(message);
     }
 
+    fn match(self: *Compiler, tokenType: TokenType) bool {
+        if (!self.check(tokenType)) return false;
+        self.advance();
+        return true;
+    }
+
+    fn check(self: *Compiler, tokenType: TokenType) bool {
+        return self.parser.current.type == tokenType;
+    }
+
     fn end(self: *Compiler) void {
         self.emitReturn();
         if (builtin.mode == .Debug and !self.parser.hadError) {
             debug.disassembleChunk(self.vm.chunk, "code");
         }
+    }
+
+    // Parsing functions.
+
+    fn declaration(self: *Compiler) void {
+        self.statement();
+    }
+
+    fn statement(self: *Compiler) void {
+        if (self.match(.PRINT)) {
+            self.printStatement();
+        } else {
+            self.expressionStatement();
+        }
+    }
+
+    fn printStatement(self: *Compiler) void {
+        self.expression();
+        self.consume(.SEMICOLON, "Expect ';' after value.");
+        self.emitByte(@intFromEnum(OpCode.PRINT));
+    }
+
+    fn expressionStatement(self: *Compiler) void {
+        self.expression();
+        self.consume(.SEMICOLON, "Expect ';' after expression.");
+        self.emitByte(@intFromEnum(OpCode.POP));
+    }
+
+    fn expression(self: *Compiler) void {
+        self.parsePrecedence(.ASSIGNMENT);
     }
 
     fn binary(self: *Compiler) void {
@@ -80,10 +125,6 @@ pub const Compiler = struct {
             .NIL => self.emitByte(@intFromEnum(OpCode.NIL)),
             else => unreachable,
         }
-    }
-
-    fn expression(self: *Compiler) void {
-        self.parsePrecedence(.ASSIGNMENT);
     }
 
     fn grouping(self: *Compiler) void {
@@ -145,6 +186,8 @@ pub const Compiler = struct {
         }
     }
 
+    // Emits.
+
     fn emitByte(self: *Compiler, byte: u8) void {
         self.vm.chunk.write(byte, self.parser.previous.line) catch {
             self.parser.hadError = true;
@@ -173,9 +216,7 @@ pub const Compiler = struct {
         return @intCast(constant);
     }
 
-    fn errorAtCurrent(self: *Compiler, message: []const u8) void {
-        self.errorAt(&self.parser.current, message);
-    }
+    // Errors.
 
     fn error_(self: *Compiler, message: []const u8) void {
         self.errorAt(&self.parser.previous, message);
@@ -195,6 +236,10 @@ pub const Compiler = struct {
 
         std.debug.print(": {s}\n", .{message});
         self.parser.hadError = true;
+    }
+
+    fn errorAtCurrent(self: *Compiler, message: []const u8) void {
+        self.errorAt(&self.parser.current, message);
     }
 };
 

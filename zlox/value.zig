@@ -10,17 +10,17 @@ pub const Value = union(ValueTypeTag) {
     obj: *Obj,
     nil: void,
 
-    pub fn asBool(self: Value) bool {
-        return switch (self) {
+    pub fn asBool(self: *const Value) bool {
+        return switch (self.*) {
             .nil => false,
             .boolean => |v| v,
             else => unreachable,
         };
     }
 
-    pub fn equals(self: Value, b: Value) bool {
-        if (@as(ValueTypeTag, self) != @as(ValueTypeTag, b)) return false;
-        return switch (self) {
+    pub fn equals(self: *const Value, b: Value) bool {
+        if (@as(ValueTypeTag, self.*) != @as(ValueTypeTag, b)) return false;
+        return switch (self.*) {
             .nil => true,
             .boolean => self.boolean == b.boolean,
             .number => self.number == b.number,
@@ -30,6 +30,17 @@ pub const Value = union(ValueTypeTag) {
                     .string => return std.mem.eql(u8, self.obj.data.string, b.obj.data.string),
                 }
             },
+        };
+    }
+
+    pub fn fmt(self: *const Value, buf: []u8) ![]const u8 {
+        return switch (self.*) {
+            .boolean => |v| std.fmt.bufPrint(buf, "{}", .{v}),
+            .number => |v| std.fmt.bufPrint(buf, "{}", .{v}),
+            .obj => |o| switch (o.data) {
+                .string => |s| std.fmt.bufPrint(buf, "'{s}'", .{s}),
+            },
+            .nil => std.fmt.bufPrint(buf, "nil", .{}),
         };
     }
 };
