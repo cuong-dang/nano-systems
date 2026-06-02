@@ -33,7 +33,6 @@ pub const Compiler = struct {
     }
 
     // Movements.
-
     fn advance(self: *Compiler) void {
         self.parser.previous = self.parser.current;
         while (true) {
@@ -63,15 +62,33 @@ pub const Compiler = struct {
 
     fn end(self: *Compiler) void {
         self.emitReturn();
-        if (builtin.mode == .Debug and !self.parser.hadError) {
-            debug.disassembleChunk(self.vm.chunk, "code");
-        }
     }
 
     // Parsing functions.
-
     fn declaration(self: *Compiler) void {
-        self.statement();
+        if (self.match(.VAR)) {
+            self.varDeclaration();
+        } else {
+            self.statement();
+        }
+
+        if (self.parser.panicMode) self.synchronize();
+    }
+
+    fn varDeclaration(self: *Compiler) void {
+        const global = self.parseVariable("Expect variable name.") catch {
+            self.parser.hadError = true;
+            return;
+        };
+
+        if (self.match(.EQUAL)) {
+            self.expression();
+        } else {
+            self.emitOp(.NIL);
+        }
+        self.consume(.SEMICOLON, "Expect ';' after variable declaration.");
+
+        self.defineVariable(global);
     }
 
     fn statement(self: *Compiler) void {
@@ -85,54 +102,97 @@ pub const Compiler = struct {
     fn printStatement(self: *Compiler) void {
         self.expression();
         self.consume(.SEMICOLON, "Expect ';' after value.");
-        self.emitByte(@intFromEnum(OpCode.PRINT));
+        self.emitOp(.PRINT);
     }
 
     fn expressionStatement(self: *Compiler) void {
         self.expression();
         self.consume(.SEMICOLON, "Expect ';' after expression.");
-        self.emitByte(@intFromEnum(OpCode.POP));
+        self.emitOp(.POP);
     }
 
     fn expression(self: *Compiler) void {
         self.parsePrecedence(.ASSIGNMENT);
     }
 
-    fn binary(self: *Compiler) void {
+    fn parsePrecedence(self: *Compiler, precedence: Precedence) void {
+        const canAssign = @intFromEnum(precedence) <= @intFromEnum(Precedence.ASSIGNMENT);
+
+        self.advance();
+        if (getRule(self.parser.previous.type).prefix) |prefixRule| {
+            prefixRule(self, canAssign);
+        } else {
+            self.error_("Expected expression.");
+        }
+
+        while (@intFromEnum(precedence) <= @intFromEnum(getRule(self.parser.current.type).precedence)) {
+            self.advance();
+            if (getRule(self.parser.previous.type).infix) |infixRule| {
+                infixRule(self, canAssign);
+            } else {
+                unreachable;
+            }
+        }
+
+        if (canAssign and self.match(.EQUAL)) {
+            self.error_("Invalid assignment target.");
+        }
+    }
+
+    fn unary(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
+        const operatorType = self.parser.previous.type;
+
+        // Compile the operand.
+        self.parsePrecedence(.UNARY);
+
+        // Emit the operator instruction.
+        switch (operatorType) {
+            .BANG => self.emitOp(.NOT),
+            .MINUS => self.emitOp(.NEGATE),
+            else => unreachable,
+        }
+    }
+
+    fn binary(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
         const operatorType = self.parser.previous.type;
         const rule = getRule(operatorType);
         self.parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
 
         switch (operatorType) {
-            .PLUS => self.emitByte(@intFromEnum(OpCode.ADD)),
-            .MINUS => self.emitByte(@intFromEnum(OpCode.SUBTRACT)),
-            .STAR => self.emitByte(@intFromEnum(OpCode.MULTIPLY)),
-            .SLASH => self.emitByte(@intFromEnum(OpCode.DIVIDE)),
+            .PLUS => self.emitOp(.ADD),
+            .MINUS => self.emitOp(.SUBTRACT),
+            .STAR => self.emitOp(.MULTIPLY),
+            .SLASH => self.emitOp(.DIVIDE),
             .BANG_EQUAL => self.emitBytes(@intFromEnum(OpCode.EQUAL), @intFromEnum(OpCode.NOT)),
-            .EQUAL_EQUAL => self.emitByte(@intFromEnum(OpCode.EQUAL)),
-            .GREATER => self.emitByte(@intFromEnum(OpCode.GREATER)),
+            .EQUAL_EQUAL => self.emitOp(.EQUAL),
+            .GREATER => self.emitOp(.GREATER),
             .GREATER_EQUAL => self.emitBytes(@intFromEnum(OpCode.LESS), @intFromEnum(OpCode.NOT)),
-            .LESS => self.emitByte(@intFromEnum(OpCode.LESS)),
+            .LESS => self.emitOp(.LESS),
             .LESS_EQUAL => self.emitBytes(@intFromEnum(OpCode.GREATER), @intFromEnum(OpCode.NOT)),
             else => unreachable,
         }
     }
 
-    fn literal(self: *Compiler) void {
+    fn literal(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
         switch (self.parser.previous.type) {
-            .FALSE => self.emitByte(@intFromEnum(OpCode.FALSE)),
-            .TRUE => self.emitByte(@intFromEnum(OpCode.TRUE)),
-            .NIL => self.emitByte(@intFromEnum(OpCode.NIL)),
+            .FALSE => self.emitOp(.FALSE),
+            .TRUE => self.emitOp(.TRUE),
+            .NIL => self.emitOp(.NIL),
             else => unreachable,
         }
     }
 
-    fn grouping(self: *Compiler) void {
+    fn grouping(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
         self.expression();
         self.consume(.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    fn number(self: *Compiler) void {
+    fn number(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
         const v = std.fmt.parseFloat(f64, self.parser.previous.lexeme) catch {
             self.parser.hadError = true;
             return;
@@ -143,50 +203,53 @@ pub const Compiler = struct {
         };
     }
 
-    fn string(self: *Compiler) void {
-        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme, self.vm) catch {
+    fn string(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
+        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme) catch {
             self.parser.hadError = true;
             return;
         };
+        self.vm.addObject(obj);
         self.emitConstant(.{ .obj = obj }) catch {
             self.parser.hadError = true;
             return;
         };
     }
 
-    fn unary(self: *Compiler) void {
-        const operatorType = self.parser.previous.type;
+    fn variable(self: *Compiler, canAssign: bool) void {
+        self.namedVariable(self.parser.previous.lexeme, canAssign);
+    }
 
-        // Compile the operand.
-        self.parsePrecedence(.UNARY);
-
-        // Emit the operator instruction.
-        switch (operatorType) {
-            .BANG => self.emitByte(@intFromEnum(OpCode.NOT)),
-            .MINUS => self.emitByte(@intFromEnum(OpCode.NEGATE)),
-            else => unreachable,
+    fn namedVariable(self: *Compiler, name: []const u8, canAssign: bool) void {
+        const arg = self.identifierConstant(name) catch {
+            self.parser.hadError = true;
+            return;
+        };
+        if (canAssign and self.match(.EQUAL)) {
+            self.expression();
+            self.emitBytes(@intFromEnum(OpCode.SET_GLOBAL), arg);
+        } else {
+            self.emitBytes(@intFromEnum(OpCode.GET_GLOBAL), arg);
         }
     }
 
-    fn parsePrecedence(self: *Compiler, precedence: Precedence) void {
-        self.advance();
-        if (getRule(self.parser.previous.type).prefix) |prefixRule| {
-            prefixRule(self);
-        } else {
-            self.error_("Expected expression.");
-        }
+    fn parseVariable(self: *Compiler, errorMessage: []const u8) !u8 {
+        self.consume(.IDENTIFIER, errorMessage);
+        return try self.identifierConstant(self.parser.previous.lexeme);
+    }
 
-        while (@intFromEnum(precedence) <= @intFromEnum(getRule(self.parser.current.type).precedence)) {
-            self.advance();
-            if (getRule(self.parser.previous.type).infix) |infixRule| {
-                infixRule(self);
-            } else {
-                unreachable;
-            }
-        }
+    fn identifierConstant(self: *Compiler, name: []const u8) !u8 {
+        return try self.makeConstant(try Value.fromIdentifier(self.gpa, name));
+    }
+
+    fn defineVariable(self: *Compiler, global: u8) void {
+        self.emitBytes(@intFromEnum(OpCode.DEFINE_GLOBAL), global);
     }
 
     // Emits.
+    fn emitOp(self: *Compiler, op: OpCode) void {
+        self.emitByte(@intFromEnum(op));
+    }
 
     fn emitByte(self: *Compiler, byte: u8) void {
         self.vm.chunk.write(byte, self.parser.previous.line) catch {
@@ -200,7 +263,7 @@ pub const Compiler = struct {
     }
 
     fn emitReturn(self: *Compiler) void {
-        self.emitByte(@intFromEnum(OpCode.RETURN));
+        self.emitOp(.RETURN);
     }
 
     fn emitConstant(self: *Compiler, v: Value) !void {
@@ -217,7 +280,6 @@ pub const Compiler = struct {
     }
 
     // Errors.
-
     fn error_(self: *Compiler, message: []const u8) void {
         self.errorAt(&self.parser.previous, message);
     }
@@ -240,6 +302,18 @@ pub const Compiler = struct {
 
     fn errorAtCurrent(self: *Compiler, message: []const u8) void {
         self.errorAt(&self.parser.current, message);
+    }
+
+    fn synchronize(self: *Compiler) void {
+        self.parser.panicMode = false;
+
+        while (self.parser.current.type != .EOF) {
+            if (self.parser.previous.type == .SEMICOLON) return;
+            switch (self.parser.current.type) {
+                .RETURN => return,
+                else => self.advance(),
+            }
+        }
     }
 };
 
@@ -268,7 +342,7 @@ const Precedence = enum {
     PRIMARY,
 };
 
-const ParseFn = *const fn (*Compiler) void;
+const ParseFn = *const fn (*Compiler, bool) void;
 
 const ParseRule = struct { prefix: ?ParseFn, infix: ?ParseFn, precedence: Precedence };
 
@@ -301,7 +375,7 @@ const rules = blk: {
     r[@intFromEnum(TokenType.LESS)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
     r[@intFromEnum(TokenType.LESS_EQUAL)] = .{ .prefix = null, .infix = Compiler.binary, .precedence = .COMPARISON };
 
-    r[@intFromEnum(TokenType.IDENTIFIER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.IDENTIFIER)] = .{ .prefix = Compiler.variable, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.STRING)] = .{ .prefix = Compiler.string, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.NUMBER)] = .{ .prefix = Compiler.number, .infix = null, .precedence = .NONE };
 

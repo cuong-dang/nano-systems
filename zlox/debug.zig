@@ -24,6 +24,9 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
     const op: OpCode = @enumFromInt(chunk.get(offset));
     switch (op) {
         .CONSTANT => return constantInstruction(.CONSTANT, chunk, offset),
+        .GET_GLOBAL => return constantInstruction(.GET_GLOBAL, chunk, offset),
+        .SET_GLOBAL => return constantInstruction(.SET_GLOBAL, chunk, offset),
+        .DEFINE_GLOBAL => return constantInstruction(.DEFINE_GLOBAL, chunk, offset),
         else => |v| return simpleInstruction(v, offset),
     }
 }

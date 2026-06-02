@@ -10,6 +10,10 @@ pub const Value = union(ValueTypeTag) {
     obj: *Obj,
     nil: void,
 
+    pub fn fromIdentifier(gpa: std.mem.Allocator, s: []const u8) !Value {
+        return .{ .obj = try Obj.fromStrings(gpa, &[_][]const u8{s}) };
+    }
+
     pub fn asBool(self: *const Value) bool {
         return switch (self.*) {
             .nil => false,
@@ -60,11 +64,11 @@ pub const Obj = struct {
         gpa.destroy(self);
     }
 
-    pub fn fromString(gpa: std.mem.Allocator, s: []const u8, vm: *VM) !*Obj {
-        return try fromStrings(gpa, &[_][]const u8{s[1 .. s.len - 1]}, vm);
+    pub fn fromString(gpa: std.mem.Allocator, s: []const u8) !*Obj {
+        return try fromStrings(gpa, &[_][]const u8{s[1 .. s.len - 1]});
     }
 
-    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8, vm: *VM) !*Obj {
+    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8) !*Obj {
         var obj = try gpa.create(Obj);
 
         var len: usize = 0;
@@ -76,8 +80,6 @@ pub const Obj = struct {
             @memcpy(obj.data.string[len .. len + s.len], s);
             len += s.len;
         }
-
-        vm.addObject(obj);
         return obj;
     }
 };

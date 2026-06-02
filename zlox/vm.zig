@@ -19,11 +19,12 @@ pub const VM = struct {
     stack: [stackMax]Value,
     stackTop: [*]Value,
     objects: ?*Obj,
+    globals: std.StringHashMap(Value),
     gpa: std.mem.Allocator,
     io: std.Io,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io) VM {
-        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .gpa = gpa, .io = io };
+        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .globals = .init(gpa), .gpa = gpa, .io = io };
     }
 
     pub fn deinit(self: *VM) void {
@@ -36,10 +37,11 @@ pub const VM = struct {
             obj.?.deinit(self.gpa);
             obj = next;
         }
+        self.globals.deinit();
     }
 
     pub fn interpret(self: *VM, source: []const u8) InterpretResult {
-        self.chunk = self.gpa.create(Chunk) catch return .INTERPRET_RUNTIME_ERROR;
+        self.chunk = self.gpa.create(Chunk) catch return self.allocError();
         self.chunk.* = Chunk.init(self.gpa);
 
         self.resetStack();
@@ -55,6 +57,7 @@ pub const VM = struct {
 
     fn run(self: *VM) InterpretResult {
         if (builtin.mode == .Debug) {
+            debug.disassembleChunk(self.chunk, "code");
             std.debug.print("== run ==\n", .{});
         }
         while (true) {
@@ -72,16 +75,36 @@ pub const VM = struct {
                 _ = debug.disassembleInstruction(self.chunk, self.ip - self.chunk.code());
             }
 
-            const instruction: OpCode = @enumFromInt(self.read_byte());
+            const instruction: OpCode = @enumFromInt(self.readByte());
             switch (instruction) {
                 .CONSTANT => {
-                    const constant = self.read_constant();
+                    const constant = self.readConstant();
                     self.push(constant);
                 },
                 .NIL => self.push(.{ .nil = void{} }),
                 .TRUE => self.push(.{ .boolean = true }),
                 .FALSE => self.push(.{ .boolean = false }),
                 .POP => _ = self.pop(),
+                .GET_GLOBAL => {
+                    const name = self.readConstant().obj.data.string;
+                    const value = self.globals.get(name) orelse {
+                        self.runtimeError("Undefined variable '{s}'.", .{name});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    };
+                    self.push(value);
+                },
+                .SET_GLOBAL => {
+                    const name = self.readConstant().obj.data.string;
+                    _ = self.globals.get(name) orelse {
+                        self.runtimeError("Undefined variable '{s}'.", .{name});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    };
+                    self.globals.put(name, self.peek(0)) catch return self.allocError();
+                },
+                .DEFINE_GLOBAL => {
+                    self.globals.put(self.readConstant().obj.data.string, self.peek(0)) catch return self.allocError();
+                    _ = self.pop();
+                },
                 .EQUAL => self.push(.{ .boolean = self.pop().equals(self.pop()) }),
                 .GREATER => {
                     if (!self.ensure2Numbers()) {
@@ -107,7 +130,8 @@ pub const VM = struct {
                     switch (a) {
                         .number => self.push(.{ .number = a.number + b.number }),
                         .obj => {
-                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.data.string, b.obj.data.string }, self) catch return .INTERPRET_RUNTIME_ERROR;
+                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.data.string, b.obj.data.string }) catch return self.allocError();
+                            self.addObject(obj);
                             self.push(.{ .obj = obj });
                         },
                         else => unreachable,
@@ -154,9 +178,9 @@ pub const VM = struct {
                 },
                 .PRINT => {
                     var buf: [256]u8 = undefined;
-                    const s = self.pop().fmt(&buf) catch return .INTERPRET_RUNTIME_ERROR;
-                    std.Io.File.stdout().writeStreamingAll(self.io, s) catch return .INTERPRET_RUNTIME_ERROR;
-                    std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return .INTERPRET_RUNTIME_ERROR;
+                    const s = self.pop().fmt(&buf) catch return self.allocError();
+                    std.Io.File.stdout().writeStreamingAll(self.io, s) catch return self.allocError();
+                    std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return self.allocError();
                 },
                 .RETURN => {
                     return .INTERPRET_OK;
@@ -170,14 +194,14 @@ pub const VM = struct {
         self.objects = obj;
     }
 
-    fn read_byte(self: *VM) u8 {
+    fn readByte(self: *VM) u8 {
         const byte = self.ip[0];
         self.ip += 1;
         return byte;
     }
 
-    fn read_constant(self: *VM) Value {
-        return self.chunk.getConstant(self.read_byte());
+    fn readConstant(self: *VM) Value {
+        return self.chunk.getConstant(self.readByte());
     }
 
     fn push(self: *VM, v: Value) void {
@@ -230,6 +254,11 @@ pub const VM = struct {
         const line = self.chunk.lineOf(instruction);
         std.debug.print("[line {}] in script\n", .{line});
         self.resetStack();
+    }
+
+    fn allocError(self: *VM) InterpretResult {
+        self.runtimeError("Memory allocation error.", .{});
+        return .INTERPRET_RUNTIME_ERROR;
     }
 };
 
