@@ -15,10 +15,12 @@ pub const Compiler = struct {
     gpa: std.mem.Allocator,
     scanner: Scanner,
     parser: Parser,
+    stringConstants: std.StringHashMap(u8),
     vm: *VM,
 
     pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) bool {
-        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .vm = vm };
+        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm };
+        defer self.stringConstants.deinit();
         self.scanner = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
@@ -239,7 +241,7 @@ pub const Compiler = struct {
     }
 
     fn identifierConstant(self: *Compiler, name: []const u8) !u8 {
-        return try self.makeConstant(try Value.fromIdentifier(self.gpa, name));
+        return try self.resolveConstant(try Value.fromIdentifier(self.gpa, name));
     }
 
     fn defineVariable(self: *Compiler, global: u8) void {
@@ -267,7 +269,21 @@ pub const Compiler = struct {
     }
 
     fn emitConstant(self: *Compiler, v: Value) !void {
-        self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.makeConstant(v));
+        self.emitBytes(@intFromEnum(OpCode.CONSTANT), try self.resolveConstant(v));
+    }
+
+    fn resolveConstant(self: *Compiler, v: Value) !u8 {
+        switch (v) {
+            .obj => |o| switch (o.data) {
+                .string => |s| {
+                    if (!self.stringConstants.contains(s)) {
+                        try self.stringConstants.put(s, try self.makeConstant(v));
+                    }
+                    return self.stringConstants.get(s).?;
+                },
+            },
+            else => return try self.makeConstant(v),
+        }
     }
 
     fn makeConstant(self: *Compiler, v: Value) !u8 {
