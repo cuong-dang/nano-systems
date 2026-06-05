@@ -12,6 +12,10 @@ const VM = @import("./vm.zig").VM;
 const debug = @import("./debug.zig");
 
 pub const Compiler = struct {
+    locals: [std.math.maxInt(u8) + 1]Local,
+    localCount: u8,
+    scopeDepth: usize,
+
     gpa: std.mem.Allocator,
     scanner: Scanner,
     parser: Parser,
@@ -19,7 +23,7 @@ pub const Compiler = struct {
     vm: *VM,
 
     pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) bool {
-        var self = Compiler{ .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm };
+        var self = Compiler{ .locals = undefined, .localCount = 0, .scopeDepth = 0, .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm };
         defer self.stringConstants.deinit();
         self.scanner = .init(source);
         self.parser.hadError = false;
@@ -96,6 +100,10 @@ pub const Compiler = struct {
     fn statement(self: *Compiler) void {
         if (self.match(.PRINT)) {
             self.printStatement();
+        } else if (self.match(.LEFT_BRACE)) {
+            self.beginScope();
+            self.block();
+            self.endScope();
         } else {
             self.expressionStatement();
         }
@@ -105,6 +113,25 @@ pub const Compiler = struct {
         self.expression();
         self.consume(.SEMICOLON, "Expect ';' after value.");
         self.emitOp(.PRINT);
+    }
+
+    fn block(self: *Compiler) void {
+        while (!self.check(.RIGHT_BRACE) and !self.check(.EOF)) {
+            self.declaration();
+        }
+        self.consume(.RIGHT_BRACE, "Expect '}' after block.");
+    }
+
+    fn beginScope(self: *Compiler) void {
+        self.scopeDepth += 1;
+    }
+
+    fn endScope(self: *Compiler) void {
+        self.scopeDepth -= 1;
+
+        while (self.localCount > 0 and self.locals[self.localCount - 1].depth != null and self.locals[self.localCount - 1].depth.? > self.scopeDepth) : (self.localCount -= 1) {
+            self.emitOp(.POP);
+        }
     }
 
     fn expressionStatement(self: *Compiler) void {
@@ -223,21 +250,81 @@ pub const Compiler = struct {
     }
 
     fn namedVariable(self: *Compiler, name: []const u8, canAssign: bool) void {
-        const arg = self.identifierConstant(name) catch {
-            self.parser.hadError = true;
-            return;
-        };
+        var getOp: OpCode = undefined;
+        var setOp: OpCode = undefined;
+        var arg = self.resolveLocal(name);
+        if (arg != null) {
+            getOp = .GET_LOCAL;
+            setOp = .SET_LOCAL;
+        } else {
+            arg = self.identifierConstant(name) catch {
+                self.parser.hadError = true;
+                return;
+            };
+            getOp = .GET_GLOBAL;
+            setOp = .SET_GLOBAL;
+        }
+
         if (canAssign and self.match(.EQUAL)) {
             self.expression();
-            self.emitBytes(@intFromEnum(OpCode.SET_GLOBAL), arg);
+            self.emitBytes(@intFromEnum(setOp), arg.?);
         } else {
-            self.emitBytes(@intFromEnum(OpCode.GET_GLOBAL), arg);
+            self.emitBytes(@intFromEnum(getOp), arg.?);
         }
+    }
+
+    fn resolveLocal(self: *const Compiler, name: []const u8) ?u8 {
+        if (self.localCount == 0) return null;
+        var i = self.localCount - 1;
+        while (i >= 0) : (i -= 1) {
+            if (std.mem.eql(u8, self.locals[i].name, name)) {
+                return i;
+            }
+            if (i == 0) break;
+        }
+        return null;
     }
 
     fn parseVariable(self: *Compiler, errorMessage: []const u8) !u8 {
         self.consume(.IDENTIFIER, errorMessage);
+
+        self.declareVariable();
+        if (self.scopeDepth > 0) return 0;
+
         return try self.identifierConstant(self.parser.previous.lexeme);
+    }
+
+    fn declareVariable(self: *Compiler) void {
+        if (self.scopeDepth == 0) return;
+        if (self.localCount > 0) {
+            var i = self.localCount - 1;
+            while (i >= 0) : (i -= 1) {
+                const local = &self.locals[i];
+                if (local.depth != null and local.depth.? < self.scopeDepth) {
+                    break;
+                }
+
+                if (std.mem.eql(u8, self.parser.previous.lexeme, local.name)) {
+                    self.error_("Already a variable with this name in this scope.");
+                }
+
+                if (i == 0) break;
+            }
+        }
+
+        self.addLocal(self.parser.previous.lexeme);
+    }
+
+    fn addLocal(self: *Compiler, name: []const u8) void {
+        if (self.localCount == std.math.maxInt(u8)) {
+            self.error_("Too many local variables in function.");
+            return;
+        }
+
+        const local = &self.locals[self.localCount];
+        local.name = name;
+        local.depth = self.scopeDepth;
+        self.localCount += 1;
     }
 
     fn identifierConstant(self: *Compiler, name: []const u8) !u8 {
@@ -245,6 +332,7 @@ pub const Compiler = struct {
     }
 
     fn defineVariable(self: *Compiler, global: u8) void {
+        if (self.scopeDepth > 0) return;
         self.emitBytes(@intFromEnum(OpCode.DEFINE_GLOBAL), global);
     }
 
@@ -356,6 +444,11 @@ const Precedence = enum {
     UNARY, // ! -
     CALL, // . ()
     PRIMARY,
+};
+
+const Local = struct {
+    name: []const u8,
+    depth: ?usize,
 };
 
 const ParseFn = *const fn (*Compiler, bool) void;

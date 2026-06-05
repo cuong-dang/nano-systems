@@ -67,6 +67,8 @@ pub const OpCode = enum {
     TRUE,
     FALSE,
     POP,
+    GET_LOCAL,
+    SET_LOCAL,
     GET_GLOBAL,
     SET_GLOBAL,
     DEFINE_GLOBAL,

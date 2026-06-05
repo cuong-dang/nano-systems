@@ -11,12 +11,10 @@ const printValue = @import("./value.zig").printValue;
 const Compiler = @import("./compiler.zig").Compiler;
 const debug = @import("./debug.zig");
 
-const stackMax = 256;
-
 pub const VM = struct {
     chunk: *Chunk,
     ip: [*]const u8,
-    stack: [stackMax]Value,
+    stack: [std.math.maxInt(u8)]Value,
     stackTop: [*]Value,
     objects: ?*Obj,
     globals: std.StringHashMap(Value),
@@ -85,6 +83,13 @@ pub const VM = struct {
                 .TRUE => self.push(.{ .boolean = true }),
                 .FALSE => self.push(.{ .boolean = false }),
                 .POP => _ = self.pop(),
+                .GET_LOCAL => {
+                    self.push(self.stack[self.readByte()]);
+                },
+                .SET_LOCAL => {
+                    const slot = self.readByte();
+                    self.stack[slot] = self.peek(0);
+                },
                 .GET_GLOBAL => {
                     const name = self.readConstant().obj.data.string;
                     const value = self.globals.get(name) orelse {
