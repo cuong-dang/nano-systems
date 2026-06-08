@@ -59,6 +59,7 @@ pub const VM = struct {
             std.debug.print("== run ==\n", .{});
         }
         while (true) {
+            // Print stack.
             if (builtin.mode == .Debug) {
                 const count = self.stackTop - &self.stack;
                 for (0..count) |i| {

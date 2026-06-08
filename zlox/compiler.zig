@@ -273,11 +273,14 @@ pub const Compiler = struct {
         }
     }
 
-    fn resolveLocal(self: *const Compiler, name: []const u8) ?u8 {
+    fn resolveLocal(self: *Compiler, name: []const u8) ?u8 {
         if (self.localCount == 0) return null;
         var i = self.localCount - 1;
         while (i >= 0) : (i -= 1) {
             if (std.mem.eql(u8, self.locals[i].name, name)) {
+                if (self.locals[i].depth == null) {
+                    self.error_("Can't read local variable in its own initializer.");
+                }
                 return i;
             }
             if (i == 0) break;
@@ -323,7 +326,7 @@ pub const Compiler = struct {
 
         const local = &self.locals[self.localCount];
         local.name = name;
-        local.depth = self.scopeDepth;
+        local.depth = null;
         self.localCount += 1;
     }
 
@@ -332,8 +335,15 @@ pub const Compiler = struct {
     }
 
     fn defineVariable(self: *Compiler, global: u8) void {
-        if (self.scopeDepth > 0) return;
+        if (self.scopeDepth > 0) {
+            self.markInitialized();
+            return;
+        }
         self.emitBytes(@intFromEnum(OpCode.DEFINE_GLOBAL), global);
+    }
+
+    fn markInitialized(self: *Compiler) void {
+        self.locals[self.localCount - 1].depth = self.scopeDepth;
     }
 
     // Emits.
