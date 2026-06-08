@@ -82,6 +82,7 @@ pub const OpCode = enum {
     NOT,
     NEGATE,
     PRINT,
+    JUMP_IF_FALSE,
     RETURN,
 };
 

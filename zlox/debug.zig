@@ -29,6 +29,7 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
         .GET_GLOBAL => return constantInstruction(.GET_GLOBAL, chunk, offset),
         .SET_GLOBAL => return constantInstruction(.SET_GLOBAL, chunk, offset),
         .DEFINE_GLOBAL => return constantInstruction(.DEFINE_GLOBAL, chunk, offset),
+        .JUMP_IF_FALSE => return shortInstruction(.JUMP_IF_FALSE, chunk, offset),
         else => |v| return simpleInstruction(v, offset),
     }
 }
@@ -50,4 +51,10 @@ fn byteInstruction(op: OpCode, chunk: *Chunk, offset: usize) usize {
     const slot = chunk.get(offset + 1);
     print("{s:<16} {d:>4}\n", .{ @tagName(op), slot });
     return offset + 2;
+}
+
+fn shortInstruction(op: OpCode, chunk: *Chunk, offset: usize) usize {
+    const short: u16 = (@as(u16, chunk.get(offset + 1)) << 8) | @as(u16, chunk.get(offset + 2));
+    print("{s:<16} {d:>4}\n", .{ @tagName(op), short });
+    return offset + 3;
 }

@@ -49,13 +49,15 @@ pub const VM = struct {
         }
 
         self.ip = self.chunk.code();
+        if (builtin.mode == .Debug) {
+            debug.disassembleChunk(self.chunk, "code");
+        }
 
         return self.run();
     }
 
     fn run(self: *VM) InterpretResult {
         if (builtin.mode == .Debug) {
-            debug.disassembleChunk(self.chunk, "code");
             std.debug.print("== run ==\n", .{});
         }
         while (true) {
@@ -188,6 +190,10 @@ pub const VM = struct {
                     std.Io.File.stdout().writeStreamingAll(self.io, s) catch return self.allocError();
                     std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return self.allocError();
                 },
+                .JUMP_IF_FALSE => {
+                    const offset = self.readShort();
+                    if (!self.peek(0).asBool()) self.ip += offset;
+                },
                 .RETURN => {
                     return .INTERPRET_OK;
                 },
@@ -204,6 +210,12 @@ pub const VM = struct {
         const byte = self.ip[0];
         self.ip += 1;
         return byte;
+    }
+
+    fn readShort(self: *VM) u16 {
+        const short: u16 = (@as(u16, self.ip[0]) << 8) | @as(u16, self.ip[1]);
+        self.ip += 2;
+        return short;
     }
 
     fn readConstant(self: *VM) Value {

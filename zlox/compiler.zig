@@ -100,6 +100,8 @@ pub const Compiler = struct {
     fn statement(self: *Compiler) void {
         if (self.match(.PRINT)) {
             self.printStatement();
+        } else if (self.match(.IF)) {
+            self.ifStatement();
         } else if (self.match(.LEFT_BRACE)) {
             self.beginScope();
             self.block();
@@ -113,6 +115,16 @@ pub const Compiler = struct {
         self.expression();
         self.consume(.SEMICOLON, "Expect ';' after value.");
         self.emitOp(.PRINT);
+    }
+
+    fn ifStatement(self: *Compiler) void {
+        self.consume(.LEFT_PAREN, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(.RIGHT_PAREN, "Expect ')' after condition.");
+
+        const thenJump = self.emitJump(.JUMP_IF_FALSE);
+        self.statement();
+        self.patchJump(thenJump);
     }
 
     fn block(self: *Compiler) void {
@@ -245,6 +257,7 @@ pub const Compiler = struct {
         };
     }
 
+    // Variables.
     fn variable(self: *Compiler, canAssign: bool) void {
         self.namedVariable(self.parser.previous.lexeme, canAssign);
     }
@@ -391,6 +404,25 @@ pub const Compiler = struct {
             return 0;
         }
         return @intCast(constant);
+    }
+
+    fn emitJump(self: *Compiler, instruction: OpCode) usize {
+        self.emitOp(instruction);
+        self.emitByte(0xff);
+        self.emitByte(0xff);
+        return self.vm.chunk.count() - 2;
+    }
+
+    fn patchJump(self: *Compiler, offset: usize) void {
+        // -2 to adjust for the bytecode for the jump offset itself.
+        const jump = self.vm.chunk.count() - offset - 2;
+        if (jump > std.math.maxInt(u16)) {
+            self.error_("Too much code to jump over.");
+        }
+        std.debug.print("offset: {}; jump: {}\n", .{ offset, jump });
+
+        self.vm.chunk._code.items[offset] = @intCast((jump >> 8) & 0xff);
+        self.vm.chunk._code.items[offset + 1] = @intCast(jump & 0xff);
     }
 
     // Errors.
