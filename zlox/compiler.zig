@@ -102,6 +102,8 @@ pub const Compiler = struct {
             self.printStatement();
         } else if (self.match(.IF)) {
             self.ifStatement();
+        } else if (self.match(.WHILE)) {
+            self.whileStatement();
         } else if (self.match(.LEFT_BRACE)) {
             self.beginScope();
             self.block();
@@ -133,6 +135,19 @@ pub const Compiler = struct {
             self.statement();
         }
         self.patchJump(elseJump);
+    }
+
+    fn whileStatement(self: *Compiler) void {
+        const loopStart = self.vm.chunk.count();
+        self.consume(.LEFT_PAREN, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(.RIGHT_PAREN, "Expect ')' after condition.");
+        const exitJump = self.emitJump(.JUMP_IF_FALSE);
+        self.emitOp(.POP);
+        self.statement();
+        self.emitLoop(loopStart);
+        self.patchJump(exitJump);
+        self.emitOp(.POP);
     }
 
     fn block(self: *Compiler) void {
@@ -448,6 +463,14 @@ pub const Compiler = struct {
 
         self.vm.chunk._code.items[offset] = @intCast((jump >> 8) & 0xff);
         self.vm.chunk._code.items[offset + 1] = @intCast(jump & 0xff);
+    }
+
+    fn emitLoop(self: *Compiler, loopStart: usize) void {
+        self.emitOp(.LOOP);
+        const offset = self.vm.chunk.count() - loopStart + 2;
+        if (offset > std.math.maxInt(u16)) self.error_("Loop body too large.");
+        self.emitByte(@intCast((offset >> 8) & 0xff));
+        self.emitByte(@intCast(offset & 0xff));
     }
 
     // Errors.

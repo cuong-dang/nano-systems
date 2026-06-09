@@ -84,6 +84,7 @@ pub const OpCode = enum {
     PRINT,
     JUMP,
     JUMP_IF_FALSE,
+    LOOP,
     RETURN,
 };
 
