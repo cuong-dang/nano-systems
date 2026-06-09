@@ -29,6 +29,7 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
         .GET_GLOBAL => return constantInstruction(.GET_GLOBAL, chunk, offset),
         .SET_GLOBAL => return constantInstruction(.SET_GLOBAL, chunk, offset),
         .DEFINE_GLOBAL => return constantInstruction(.DEFINE_GLOBAL, chunk, offset),
+        .JUMP => return shortInstruction(.JUMP, chunk, offset),
         .JUMP_IF_FALSE => return shortInstruction(.JUMP_IF_FALSE, chunk, offset),
         else => |v| return simpleInstruction(v, offset),
     }

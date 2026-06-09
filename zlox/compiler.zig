@@ -123,8 +123,16 @@ pub const Compiler = struct {
         self.consume(.RIGHT_PAREN, "Expect ')' after condition.");
 
         const thenJump = self.emitJump(.JUMP_IF_FALSE);
+        self.emitOp(.POP);
         self.statement();
+        const elseJump = self.emitJump(.JUMP);
         self.patchJump(thenJump);
+        self.emitOp(.POP);
+
+        if (self.match(.ELSE)) {
+            self.statement();
+        }
+        self.patchJump(elseJump);
     }
 
     fn block(self: *Compiler) void {
@@ -255,6 +263,24 @@ pub const Compiler = struct {
             self.parser.hadError = true;
             return;
         };
+    }
+
+    fn and_(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
+        const endJump = self.emitJump(.JUMP_IF_FALSE);
+        self.emitOp(.POP);
+        self.parsePrecedence(.AND);
+        self.patchJump(endJump);
+    }
+
+    fn or_(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
+        const elseJump = self.emitJump(.JUMP_IF_FALSE);
+        const endJump = self.emitJump(.JUMP);
+        self.patchJump(elseJump);
+        self.emitOp(.POP);
+        self.parsePrecedence(.OR);
+        self.patchJump(endJump);
     }
 
     // Variables.
@@ -419,7 +445,6 @@ pub const Compiler = struct {
         if (jump > std.math.maxInt(u16)) {
             self.error_("Too much code to jump over.");
         }
-        std.debug.print("offset: {}; jump: {}\n", .{ offset, jump });
 
         self.vm.chunk._code.items[offset] = @intCast((jump >> 8) & 0xff);
         self.vm.chunk._code.items[offset + 1] = @intCast(jump & 0xff);
@@ -530,7 +555,7 @@ const rules = blk: {
     r[@intFromEnum(TokenType.STRING)] = .{ .prefix = Compiler.string, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.NUMBER)] = .{ .prefix = Compiler.number, .infix = null, .precedence = .NONE };
 
-    r[@intFromEnum(TokenType.AND)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.AND)] = .{ .prefix = null, .infix = Compiler.and_, .precedence = .AND };
     r[@intFromEnum(TokenType.CLASS)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.ELSE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.FALSE)] = .{ .prefix = Compiler.literal, .infix = null, .precedence = .NONE };
@@ -538,7 +563,7 @@ const rules = blk: {
     r[@intFromEnum(TokenType.FUN)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.IF)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.NIL)] = .{ .prefix = Compiler.literal, .infix = null, .precedence = .NONE };
-    r[@intFromEnum(TokenType.OR)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.OR)] = .{ .prefix = null, .infix = Compiler.or_, .precedence = .OR };
     r[@intFromEnum(TokenType.PRINT)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.RETURN)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.SUPER)] = .{ .prefix = null, .infix = null, .precedence = .NONE };

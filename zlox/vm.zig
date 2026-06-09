@@ -190,6 +190,10 @@ pub const VM = struct {
                     std.Io.File.stdout().writeStreamingAll(self.io, s) catch return self.allocError();
                     std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return self.allocError();
                 },
+                .JUMP => {
+                    const offset = self.readShort();
+                    self.ip += offset;
+                },
                 .JUMP_IF_FALSE => {
                     const offset = self.readShort();
                     if (!self.peek(0).asBool()) self.ip += offset;

@@ -18,7 +18,7 @@ pub const Value = union(ValueTypeTag) {
         return switch (self.*) {
             .nil => false,
             .boolean => |v| v,
-            else => unreachable,
+            else => true,
         };
     }
 
