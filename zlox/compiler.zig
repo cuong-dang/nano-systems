@@ -104,6 +104,8 @@ pub const Compiler = struct {
             self.ifStatement();
         } else if (self.match(.WHILE)) {
             self.whileStatement();
+        } else if (self.match(.FOR)) {
+            self.forStatement();
         } else if (self.match(.LEFT_BRACE)) {
             self.beginScope();
             self.block();
@@ -148,6 +150,48 @@ pub const Compiler = struct {
         self.emitLoop(loopStart);
         self.patchJump(exitJump);
         self.emitOp(.POP);
+    }
+
+    fn forStatement(self: *Compiler) void {
+        self.beginScope();
+        self.consume(.LEFT_PAREN, "Expect '(' after 'for'.");
+        // Initializer.
+        if (self.match(.SEMICOLON)) {
+            // No initializer.
+        } else if (self.match(.VAR)) {
+            self.varDeclaration();
+        } else {
+            self.expressionStatement();
+        }
+        // Condition.
+        var loopStart = self.vm.chunk.count();
+        var exitJump: ?usize = null;
+        if (!self.match(.SEMICOLON)) {
+            self.expression();
+            self.consume(.SEMICOLON, "Expect ';' after loop condition.");
+            exitJump = self.emitJump(.JUMP_IF_FALSE);
+            self.emitOp(.POP);
+        }
+        // Increment.
+        if (!self.match(.RIGHT_PAREN)) {
+            const bodyJump = self.emitJump(.JUMP);
+            const incrementStart = self.vm.chunk.count();
+            self.expression();
+            self.emitOp(.POP);
+            self.consume(.RIGHT_PAREN, "Expect ')' after for clauses.");
+
+            self.emitLoop(loopStart);
+            loopStart = incrementStart;
+            self.patchJump(bodyJump);
+        }
+        // Body.
+        self.statement();
+        self.emitLoop(loopStart);
+        if (exitJump != null) {
+            self.patchJump(exitJump.?);
+            self.emitOp(.POP);
+        }
+        self.endScope();
     }
 
     fn block(self: *Compiler) void {
