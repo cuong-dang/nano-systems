@@ -5,29 +5,31 @@ const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./value.zig").Value;
 const Obj = @import("./value.zig").Obj;
+const Function = @import("./value.zig").Function;
 const ValueTypeTag = @import("./value.zig").ValueTypeTag;
 const ObjTypeTag = @import("./value.zig").ObjTypeTag;
 const printValue = @import("./value.zig").printValue;
 const Compiler = @import("./compiler.zig").Compiler;
 const debug = @import("./debug.zig");
 
+const FRAMES_MAX = 64;
+const STACK_MAX = FRAMES_MAX * std.math.maxInt(u8);
+
 pub const VM = struct {
-    chunk: *Chunk,
-    ip: [*]const u8,
-    stack: [std.math.maxInt(u8)]Value,
-    stackTop: [*]Value,
-    objects: ?*Obj,
+    frames: [FRAMES_MAX]CallFrame = undefined,
+    frameCount: usize = 0,
+    stack: [STACK_MAX]Value = undefined,
+    stackTop: [*]Value = undefined,
+    objects: ?*Obj = null,
     globals: std.StringHashMap(Value),
     gpa: std.mem.Allocator,
     io: std.Io,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io) VM {
-        return .{ .chunk = undefined, .ip = undefined, .stack = undefined, .stackTop = undefined, .objects = null, .globals = .init(gpa), .gpa = gpa, .io = io };
+        return .{ .globals = .init(gpa), .gpa = gpa, .io = io };
     }
 
     pub fn deinit(self: *VM) void {
-        self.chunk.deinit(self.gpa);
-        self.gpa.destroy(self.chunk);
         // Free objects.
         var obj: ?*Obj = self.objects;
         while (obj != null) {
@@ -39,24 +41,27 @@ pub const VM = struct {
     }
 
     pub fn interpret(self: *VM, source: []const u8) InterpretResult {
-        self.chunk = self.gpa.create(Chunk) catch return self.allocError();
-        self.chunk.* = Chunk.init(self.gpa);
-
         self.resetStack();
 
-        if (!(Compiler.compile(self.gpa, source, self))) {
+        const functionObj = Compiler.compile(self.gpa, source, self);
+
+        if (functionObj == null) {
             return .INTERPRET_COMPILE_ERROR;
         }
-
-        self.ip = self.chunk.code();
-        if (builtin.mode == .Debug) {
-            debug.disassembleChunk(self.chunk, "code");
-        }
+        self.push(.{ .obj = functionObj.? });
+        self.objects = functionObj.?;
+        var frame = &self.frames[self.frameCount];
+        self.frameCount += 1;
+        frame.function = &functionObj.?.data.function;
+        frame.ip = frame.function.chunk.code();
+        frame.slots = &self.stack;
 
         return self.run();
     }
 
     fn run(self: *VM) InterpretResult {
+        var frame = &self.frames[self.frameCount - 1];
+
         if (builtin.mode == .Debug) {
             std.debug.print("== run ==\n", .{});
         }
@@ -73,13 +78,13 @@ pub const VM = struct {
                     std.debug.print("\n", .{});
                 }
 
-                _ = debug.disassembleInstruction(self.chunk, self.ip - self.chunk.code());
+                _ = debug.disassembleInstruction(&frame.function.chunk, frame.ip - frame.function.chunk.code());
             }
 
-            const instruction: OpCode = @enumFromInt(self.readByte());
+            const instruction: OpCode = @enumFromInt(frame.readByte());
             switch (instruction) {
                 .CONSTANT => {
-                    const constant = self.readConstant();
+                    const constant = frame.readConstant();
                     self.push(constant);
                 },
                 .NIL => self.push(.{ .nil = void{} }),
@@ -87,14 +92,14 @@ pub const VM = struct {
                 .FALSE => self.push(.{ .boolean = false }),
                 .POP => _ = self.pop(),
                 .GET_LOCAL => {
-                    self.push(self.stack[self.readByte()]);
+                    self.push(frame.slots[frame.readByte()]);
                 },
                 .SET_LOCAL => {
-                    const slot = self.readByte();
-                    self.stack[slot] = self.peek(0);
+                    const slot = frame.readByte();
+                    frame.slots[slot] = self.peek(0);
                 },
                 .GET_GLOBAL => {
-                    const name = self.readConstant().obj.data.string;
+                    const name = frame.readConstant().obj.data.string;
                     const value = self.globals.get(name) orelse {
                         self.runtimeError("Undefined variable '{s}'.", .{name});
                         return .INTERPRET_RUNTIME_ERROR;
@@ -102,7 +107,7 @@ pub const VM = struct {
                     self.push(value);
                 },
                 .SET_GLOBAL => {
-                    const name = self.readConstant().obj.data.string;
+                    const name = frame.readConstant().obj.data.string;
                     _ = self.globals.get(name) orelse {
                         self.runtimeError("Undefined variable '{s}'.", .{name});
                         return .INTERPRET_RUNTIME_ERROR;
@@ -110,7 +115,7 @@ pub const VM = struct {
                     self.globals.put(name, self.peek(0)) catch return self.allocError();
                 },
                 .DEFINE_GLOBAL => {
-                    self.globals.put(self.readConstant().obj.data.string, self.peek(0)) catch return self.allocError();
+                    self.globals.put(frame.readConstant().obj.data.string, self.peek(0)) catch return self.allocError();
                     _ = self.pop();
                 },
                 .EQUAL => self.push(.{ .boolean = self.pop().equals(self.pop()) }),
@@ -191,16 +196,16 @@ pub const VM = struct {
                     std.Io.File.stdout().writeStreamingAll(self.io, "\n") catch return self.allocError();
                 },
                 .JUMP => {
-                    const offset = self.readShort();
-                    self.ip += offset;
+                    const offset = frame.readShort();
+                    frame.ip += offset;
                 },
                 .JUMP_IF_FALSE => {
-                    const offset = self.readShort();
-                    if (!self.peek(0).asBool()) self.ip += offset;
+                    const offset = frame.readShort();
+                    if (!self.peek(0).asBool()) frame.ip += offset;
                 },
                 .LOOP => {
-                    const offset = self.readShort();
-                    self.ip -= offset;
+                    const offset = frame.readShort();
+                    frame.ip -= offset;
                 },
                 .RETURN => {
                     return .INTERPRET_OK;
@@ -212,22 +217,6 @@ pub const VM = struct {
     pub fn addObject(self: *VM, obj: *Obj) void {
         obj.next = self.objects;
         self.objects = obj;
-    }
-
-    fn readByte(self: *VM) u8 {
-        const byte = self.ip[0];
-        self.ip += 1;
-        return byte;
-    }
-
-    fn readShort(self: *VM) u16 {
-        const short: u16 = (@as(u16, self.ip[0]) << 8) | @as(u16, self.ip[1]);
-        self.ip += 2;
-        return short;
-    }
-
-    fn readConstant(self: *VM) Value {
-        return self.chunk.getConstant(self.readByte());
     }
 
     fn push(self: *VM, v: Value) void {
@@ -276,8 +265,9 @@ pub const VM = struct {
         std.debug.print(format, args);
         std.debug.print("\n", .{});
 
-        const instruction = self.ip - self.chunk.code() - 1;
-        const line = self.chunk.lineOf(instruction);
+        const frame = &self.frames[self.frameCount - 1];
+        const instruction = frame.ip - frame.function.chunk.code() - 1;
+        const line = frame.function.chunk.lineOf(instruction);
         std.debug.print("[line {}] in script\n", .{line});
         self.resetStack();
     }
@@ -289,3 +279,25 @@ pub const VM = struct {
 };
 
 const InterpretResult = enum { INTERPRET_OK, INTERPRET_COMPILE_ERROR, INTERPRET_RUNTIME_ERROR };
+
+const CallFrame = struct {
+    function: *Function,
+    ip: [*]const u8,
+    slots: [*]Value,
+
+    fn readByte(self: *CallFrame) u8 {
+        const byte = self.ip[0];
+        self.ip += 1;
+        return byte;
+    }
+
+    fn readConstant(self: *CallFrame) Value {
+        return self.function.chunk.getConstant(self.readByte());
+    }
+
+    fn readShort(self: *CallFrame) u16 {
+        const short: u16 = (@as(u16, self.ip[0]) << 8) | @as(u16, self.ip[1]);
+        self.ip += 2;
+        return short;
+    }
+};

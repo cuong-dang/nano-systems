@@ -5,6 +5,7 @@ const Chunk = @import("./chunk.zig").Chunk;
 const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./value.zig").Value;
 const Obj = @import("./value.zig").Obj;
+const Function = @import("./value.zig").Function;
 const Scanner = @import("./scanner.zig").Scanner;
 const Token = @import("./scanner.zig").Token;
 const TokenType = @import("./scanner.zig").TokenType;
@@ -22,9 +23,20 @@ pub const Compiler = struct {
     stringConstants: std.StringHashMap(u8),
     vm: *VM,
 
-    pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) bool {
-        var self = Compiler{ .locals = undefined, .localCount = 0, .scopeDepth = 0, .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm };
+    functionObj: *Obj,
+    function: *Function = undefined,
+    functionType: FunctionType,
+
+    pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) ?*Obj {
+        var self = Compiler{ .locals = undefined, .localCount = 0, .scopeDepth = 0, .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm, .functionObj = Obj.newFunction(gpa) catch return null, .functionType = .SCRIPT };
+        self.function = &self.functionObj.data.function;
         defer self.stringConstants.deinit();
+
+        const local = &self.locals[self.localCount];
+        local.depth = 0;
+        local.name = "";
+        self.localCount += 1;
+
         self.scanner = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
@@ -34,8 +46,7 @@ pub const Compiler = struct {
             self.declaration();
         }
 
-        self.end();
-        return !self.parser.hadError;
+        return if (self.parser.hadError) null else self.end();
     }
 
     // Movements.
@@ -66,8 +77,12 @@ pub const Compiler = struct {
         return self.parser.current.type == tokenType;
     }
 
-    fn end(self: *Compiler) void {
+    fn end(self: *Compiler) *Obj {
         self.emitReturn();
+        if (builtin.mode == .Debug) {
+            debug.disassembleChunk(&self.function.chunk, if (self.function.name.len != 0) self.function.name else "<script>");
+        }
+        return self.functionObj;
     }
 
     // Parsing functions.
@@ -140,7 +155,7 @@ pub const Compiler = struct {
     }
 
     fn whileStatement(self: *Compiler) void {
-        const loopStart = self.vm.chunk.count();
+        const loopStart = self.function.chunk.count();
         self.consume(.LEFT_PAREN, "Expect '(' after 'while'.");
         self.expression();
         self.consume(.RIGHT_PAREN, "Expect ')' after condition.");
@@ -164,7 +179,7 @@ pub const Compiler = struct {
             self.expressionStatement();
         }
         // Condition.
-        var loopStart = self.vm.chunk.count();
+        var loopStart = self.function.chunk.count();
         var exitJump: ?usize = null;
         if (!self.match(.SEMICOLON)) {
             self.expression();
@@ -175,7 +190,7 @@ pub const Compiler = struct {
         // Increment.
         if (!self.match(.RIGHT_PAREN)) {
             const bodyJump = self.emitJump(.JUMP);
-            const incrementStart = self.vm.chunk.count();
+            const incrementStart = self.function.chunk.count();
             self.expression();
             self.emitOp(.POP);
             self.consume(.RIGHT_PAREN, "Expect ')' after for clauses.");
@@ -450,7 +465,7 @@ pub const Compiler = struct {
     }
 
     fn emitByte(self: *Compiler, byte: u8) void {
-        self.vm.chunk.write(byte, self.parser.previous.line) catch {
+        self.function.chunk.write(byte, self.parser.previous.line) catch {
             self.parser.hadError = true;
         };
     }
@@ -477,13 +492,14 @@ pub const Compiler = struct {
                     }
                     return self.stringConstants.get(s).?;
                 },
+                .function => unreachable,
             },
             else => return try self.makeConstant(v),
         }
     }
 
     fn makeConstant(self: *Compiler, v: Value) !u8 {
-        const constant = try self.vm.chunk.addConstant(v);
+        const constant = try self.function.chunk.addConstant(v);
         if (constant > std.math.maxInt(u8)) {
             self.error_("Too many constants in one chunk.");
             return 0;
@@ -495,23 +511,23 @@ pub const Compiler = struct {
         self.emitOp(instruction);
         self.emitByte(0xff);
         self.emitByte(0xff);
-        return self.vm.chunk.count() - 2;
+        return self.function.chunk.count() - 2;
     }
 
     fn patchJump(self: *Compiler, offset: usize) void {
         // -2 to adjust for the bytecode for the jump offset itself.
-        const jump = self.vm.chunk.count() - offset - 2;
+        const jump = self.function.chunk.count() - offset - 2;
         if (jump > std.math.maxInt(u16)) {
             self.error_("Too much code to jump over.");
         }
 
-        self.vm.chunk._code.items[offset] = @intCast((jump >> 8) & 0xff);
-        self.vm.chunk._code.items[offset + 1] = @intCast(jump & 0xff);
+        self.function.chunk._code.items[offset] = @intCast((jump >> 8) & 0xff);
+        self.function.chunk._code.items[offset + 1] = @intCast(jump & 0xff);
     }
 
     fn emitLoop(self: *Compiler, loopStart: usize) void {
         self.emitOp(.LOOP);
-        const offset = self.vm.chunk.count() - loopStart + 2;
+        const offset = self.function.chunk.count() - loopStart + 2;
         if (offset > std.math.maxInt(u16)) self.error_("Loop body too large.");
         self.emitByte(@intCast((offset >> 8) & 0xff));
         self.emitByte(@intCast(offset & 0xff));
@@ -564,6 +580,11 @@ const Parser = struct {
     pub fn init() Parser {
         return .{ .current = undefined, .previous = undefined, .hadError = false, .panicMode = false };
     }
+};
+
+const FunctionType = enum {
+    FUNCTION,
+    SCRIPT,
 };
 
 const Precedence = enum {
