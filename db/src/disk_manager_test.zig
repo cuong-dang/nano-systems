@@ -15,14 +15,14 @@ test "writes and reads pages" {
     try std.testing.expectEqual(dm.pageCapacity, 16);
 
     const data = "hello, db";
-    try dm.writePage(0, data);
+    try dm.writePage(100, data);
     var out: [page.size]u8 = undefined;
-    try dm.readPage(0, &out);
+    try dm.readPage(100, &out);
     try std.testing.expectEqualSlices(u8, data, out[0..data.len]);
 
     const data2 = "hello again, db";
-    try dm.writePage(1, data2);
-    try dm.readPage(1, &out);
+    try dm.writePage(101, data2);
+    try dm.readPage(101, &out);
     try std.testing.expectEqualSlices(u8, data2, out[0..data2.len]);
 }
 
@@ -35,7 +35,7 @@ test "grows" {
     defer dm.deinit();
     defer std.Io.Dir.deleteFile(std.Io.Dir.cwd(), std.testing.io, testDbPath) catch unreachable;
 
-    for (0..17) |i| {
+    for (100..117) |i| {
         try dm.writePage(i, &.{});
     }
     try std.testing.expectEqual(dm.pageCapacity, 32);

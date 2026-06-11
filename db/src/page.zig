@@ -1,1 +1,1 @@
-pub const size = 8192;
+pub const size = 8192; // bytes

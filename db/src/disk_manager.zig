@@ -6,8 +6,10 @@ pub const DiskManager = struct {
     io: std.Io,
     file: std.Io.File,
     pages: std.AutoHashMap(usize, usize),
-    pageCapacity: usize,
-    freeSlots: std.ArrayList(usize),
+    pageCapacity: usize = initPageCapacity,
+    freeSlots: std.ArrayList(usize) = .empty,
+    buf: [page.size]u8 = undefined,
+    mu: std.Io.Mutex = std.Io.Mutex.init,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io, dbFilePath: []const u8) !DiskManager {
         const file = std.Io.Dir.openFileAbsolute(io, dbFilePath, .{ .mode = .read_write }) catch |err| switch (err) {
@@ -18,7 +20,7 @@ pub const DiskManager = struct {
             },
             else => return err,
         };
-        return .{ .gpa = gpa, .io = io, .file = file, .pages = .init(gpa), .pageCapacity = initPageCapacity, .freeSlots = .empty };
+        return .{ .gpa = gpa, .io = io, .file = file, .pages = .init(gpa) };
     }
 
     pub fn deinit(dm: *DiskManager) void {
@@ -27,23 +29,27 @@ pub const DiskManager = struct {
         dm.file.close(dm.io);
     }
 
-    pub fn readPage(dm: *const DiskManager, pageId: usize, out: []u8) !void {
+    pub fn readPage(dm: *DiskManager, pageId: usize, out: []u8) !void {
+        try dm.mu.lock(dm.io);
+        defer dm.mu.unlock(dm.io);
+
         if (!dm.pages.contains(pageId)) return Error.PageNotFound;
 
-        var buf: [128]u8 = undefined;
-        var reader = dm.file.reader(dm.io, &buf);
+        var reader = dm.file.reader(dm.io, &dm.buf);
         const offset = dm.pages.get(pageId).?;
         try reader.seekTo(offset);
         try reader.interface.readSliceAll(out);
     }
 
     pub fn writePage(dm: *DiskManager, pageId: usize, data: []const u8) !void {
+        try dm.mu.lock(dm.io);
+        defer dm.mu.unlock(dm.io);
+
         if (!dm.pages.contains(pageId)) {
             try dm.pages.put(pageId, try dm.allocatePage());
         }
 
-        var buf: [128]u8 = undefined;
-        var writer = dm.file.writer(dm.io, &buf);
+        var writer = dm.file.writer(dm.io, &dm.buf);
         const offset = dm.pages.get(pageId).?;
         try writer.seekTo(offset);
         try writer.interface.writeAll(data);
