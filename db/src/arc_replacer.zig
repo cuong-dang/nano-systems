@@ -38,11 +38,13 @@ pub const ArcReplacer = struct {
             _ = self.inMru.remove(frameId);
             self.mfu.prepend(node);
             try self.inMfu.put(frameId, node);
+            return;
         }
         // In MFU
         if (self.inMfu.get(frameId)) |node| {
             self.mfu.remove(node);
             self.mfu.prepend(node);
+            return;
         }
 
         // In MRU Ghost
@@ -50,20 +52,20 @@ pub const ArcReplacer = struct {
             if (mruGhostLen >= mfuGhostLen) self.mruTargetSize += 1 else self.mruTargetSize += mfuGhostLen / mruGhostLen;
             if (self.mruTargetSize > self.size) self.mruTargetSize = self.size;
 
-            self.mfu.prepend(node);
-            try self.inMfu.put(frameId, node);
             self.mruGhost.remove(node);
             _ = self.inMruGhost.remove(pageId);
+            self.mfu.prepend(node);
+            try self.inMfu.put(frameId, node);
             return;
         }
         // In MFU Ghost
         if (self.inMfuGhost.get(pageId)) |node| {
             if (mfuGhostLen >= mruGhostLen) self.mruTargetSize -|= 1 else self.mruTargetSize -|= mruGhostLen / mfuGhostLen;
 
-            self.mfu.prepend(node);
-            try self.inMfu.put(frameId, node);
             self.mfuGhost.remove(node);
             _ = self.inMfuGhost.remove(pageId);
+            self.mfu.prepend(node);
+            try self.inMfu.put(frameId, node);
             return;
         }
         // Not in the replacer
@@ -77,14 +79,66 @@ pub const ArcReplacer = struct {
         }
         const frame = try Frame.create(self.gpa, frameId, pageId);
         self.mru.prepend(&frame.node);
-        try self.inMru.put(pageId, &frame.node);
+        try self.inMru.put(frameId, &frame.node);
+    }
+
+    pub fn setEvictable(self: *ArcReplacer, frameId: FrameId, evictable: bool) !void {
+        const node = self.inMru.get(frameId) orelse self.inMfu.get(frameId) orelse return Error.FrameNotFound;
+        var frame: *Frame = @fieldParentPtr("node", node);
+        if (!frame.evictable and evictable) self.numEvictable += 1 else if (frame.evictable and !evictable) self.numEvictable -= 1;
+        frame.evictable = evictable;
+    }
+
+    pub fn evict(self: *ArcReplacer) !?FrameId {
+        if (self.mru.len() < self.mruTargetSize) {
+            return try self.evictFromMfu() orelse try self.evictFromMru();
+        }
+        return try self.evictFromMru() orelse try self.evictFromMfu();
+    }
+
+    fn evictFromMru(self: *ArcReplacer) !?FrameId {
+        var it = self.mru.last;
+        while (it) |node| : (it = node.prev) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            if (frame.evictable) {
+                self.mru.remove(node);
+                _ = self.inMru.remove(frame.frameId);
+
+                self.numEvictable -= 1;
+                frame.evictable = false; // reset before moving into ghost list
+
+                self.mruGhost.prepend(node);
+                try self.inMruGhost.put(frame.pageId, node);
+                return frame.frameId;
+            }
+        }
+        return null;
+    }
+
+    fn evictFromMfu(self: *ArcReplacer) !?FrameId {
+        var it = self.mfu.last;
+        while (it) |node| : (it = node.prev) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            if (frame.evictable) {
+                self.mfu.remove(node);
+                _ = self.inMfu.remove(frame.frameId);
+
+                self.numEvictable -= 1;
+                frame.evictable = false; // reset before moving into ghost list
+
+                self.mfuGhost.prepend(node);
+                try self.inMfuGhost.put(frame.pageId, node);
+                return frame.frameId;
+            }
+        }
+        return null;
     }
 };
 
 const Frame = struct {
     frameId: FrameId,
     pageId: PageId,
-    evictable: bool = true,
+    evictable: bool = false,
     node: std.DoublyLinkedList.Node,
 
     pub fn create(gpa: std.mem.Allocator, frameId: FrameId, pageId: PageId) !*Frame {
@@ -102,6 +156,8 @@ fn killLast(gpa: std.mem.Allocator, list: *std.DoublyLinkedList, lookup: *std.Au
     const last = list.last.?;
     const frame: *Frame = @fieldParentPtr("node", last);
     list.remove(last);
-    gpa.destroy(frame);
     _ = lookup.remove(frame.pageId);
+    gpa.destroy(frame);
 }
+
+const Error = error{FrameNotFound};
