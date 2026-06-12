@@ -13,13 +13,14 @@ const VM = @import("./vm.zig").VM;
 const debug = @import("./debug.zig");
 
 pub const Compiler = struct {
-    locals: [std.math.maxInt(u8) + 1]Local,
-    localCount: u8,
-    scopeDepth: usize,
-
     gpa: std.mem.Allocator,
-    scanner: Scanner,
-    parser: Parser,
+
+    locals: [std.math.maxInt(u8) + 1]Local = undefined,
+    localCount: u8 = 0,
+    scopeDepth: usize = 0,
+
+    scanner: *Scanner = undefined,
+    parser: *Parser = undefined,
     stringConstants: std.StringHashMap(u8),
     vm: *VM,
 
@@ -27,17 +28,41 @@ pub const Compiler = struct {
     function: *Function = undefined,
     functionType: FunctionType,
 
-    pub fn compile(gpa: std.mem.Allocator, source: []const u8, vm: *VM) ?*Obj {
-        var self = Compiler{ .locals = undefined, .localCount = 0, .scopeDepth = 0, .gpa = gpa, .scanner = undefined, .parser = .init(), .stringConstants = .init(gpa), .vm = vm, .functionObj = Obj.newFunction(gpa) catch return null, .functionType = .SCRIPT };
-        self.function = &self.functionObj.data.function;
-        defer self.stringConstants.deinit();
+    pub fn init(gpa: std.mem.Allocator, vm: *VM, funType: FunctionType, scanner: ?*Scanner, parser: ?*Parser) !*Compiler {
+        const compiler = try gpa.create(Compiler);
+        compiler.* = Compiler{ .gpa = gpa, .stringConstants = .init(gpa), .vm = vm, .functionObj = try Obj.newFunction(gpa), .functionType = funType };
+        compiler.function = &compiler.functionObj.data.function;
 
-        const local = &self.locals[self.localCount];
+        if (scanner) |s| {
+            compiler.scanner = s;
+        } else {
+            compiler.scanner = try gpa.create(Scanner);
+        }
+        if (parser) |p| {
+            compiler.parser = p;
+        } else {
+            compiler.parser = try gpa.create(Parser);
+            compiler.parser.* = .init();
+        }
+
+        const local = &compiler.locals[compiler.localCount];
         local.depth = 0;
         local.name = "";
-        self.localCount += 1;
+        compiler.localCount += 1;
+        return compiler;
+    }
 
-        self.scanner = .init(source);
+    pub fn deinit(self: *Compiler, ownedScannerParser: bool) void {
+        if (ownedScannerParser) {
+            self.gpa.destroy(self.scanner);
+            self.gpa.destroy(self.parser);
+        }
+        self.stringConstants.deinit();
+        self.gpa.destroy(self);
+    }
+
+    pub fn compile(self: *Compiler, source: []const u8) ?*Obj {
+        self.scanner.* = .init(source);
         self.parser.hadError = false;
         self.parser.panicMode = false;
         self.advance();
@@ -80,20 +105,57 @@ pub const Compiler = struct {
     fn end(self: *Compiler) *Obj {
         self.emitReturn();
         if (builtin.mode == .Debug) {
-            debug.disassembleChunk(&self.function.chunk, if (self.function.name.len != 0) self.function.name else "<script>");
+            const name = if (self.function.name.len != 0) std.fmt.allocPrint(self.gpa, "<fn {s}>", .{self.function.name}) catch unreachable else "<script>";
+            debug.disassembleChunk(&self.function.chunk, name);
         }
         return self.functionObj;
     }
 
     // Parsing functions.
     fn declaration(self: *Compiler) void {
-        if (self.match(.VAR)) {
+        if (self.match(.FUN)) {
+            self.funDeclaration();
+        } else if (self.match(.VAR)) {
             self.varDeclaration();
         } else {
             self.statement();
         }
 
         if (self.parser.panicMode) self.synchronize();
+    }
+
+    fn funDeclaration(self: *Compiler) void {
+        const global = self.parseVariable("Expect function name.") catch {
+            self.parser.hadError = true;
+            return;
+        };
+        self.markInitialized();
+        self.fun(.FUNCTION);
+        self.defineVariable(global);
+    }
+
+    fn fun(self: *Compiler, funType: FunctionType) void {
+        var compiler = Compiler.init(self.gpa, self.vm, funType, self.scanner, self.parser) catch {
+            self.parser.hadError = true;
+            return;
+        };
+        defer compiler.deinit(false);
+        compiler.function.name = compiler.gpa.alloc(u8, self.parser.previous.lexeme.len) catch {
+            self.parser.hadError = true;
+            return;
+        };
+        @memcpy(compiler.function.name, self.parser.previous.lexeme);
+        compiler.beginScope();
+        compiler.consume(.LEFT_PAREN, "Expect '(' after function name.");
+        compiler.consume(.RIGHT_PAREN, "Expect ')' after parameters.");
+        compiler.consume(.LEFT_BRACE, "Expect '{' before function body.");
+        compiler.block();
+        const function = compiler.end();
+        self.vm.addObject(function);
+        self.emitBytes(@intFromEnum(OpCode.CONSTANT), self.makeConstant(.{ .obj = function }) catch {
+            self.parser.hadError = true;
+            return;
+        });
     }
 
     fn varDeclaration(self: *Compiler) void {
@@ -456,6 +518,7 @@ pub const Compiler = struct {
     }
 
     fn markInitialized(self: *Compiler) void {
+        if (self.scopeDepth == 0) return;
         self.locals[self.localCount - 1].depth = self.scopeDepth;
     }
 

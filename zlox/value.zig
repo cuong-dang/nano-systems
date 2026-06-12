@@ -55,7 +55,7 @@ pub const Value = union(ValueTypeTag) {
 pub const Function = struct {
     arity: usize,
     chunk: Chunk,
-    name: []const u8,
+    name: []u8,
 };
 
 pub const ObjTypeTag = enum { string, function };
@@ -71,6 +71,7 @@ pub const Obj = struct {
             .string => |s| gpa.free(s),
             .function => |*f| {
                 f.chunk.deinit(gpa);
+                gpa.free(f.name);
             },
         }
         gpa.destroy(self);

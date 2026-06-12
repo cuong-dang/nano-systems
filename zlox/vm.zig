@@ -42,8 +42,12 @@ pub const VM = struct {
 
     pub fn interpret(self: *VM, source: []const u8) InterpretResult {
         self.resetStack();
+        const compiler = Compiler.init(self.gpa, self, .SCRIPT, null, null) catch {
+            return .INTERPRET_COMPILE_ERROR;
+        };
+        defer compiler.deinit(true);
 
-        const functionObj = Compiler.compile(self.gpa, source, self);
+        const functionObj = compiler.compile(source);
 
         if (functionObj == null) {
             return .INTERPRET_COMPILE_ERROR;

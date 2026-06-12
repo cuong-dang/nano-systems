@@ -23,11 +23,10 @@ pub fn main(init: std.process.Init) !void {
 fn repl(vm: *VM, io: std.Io) !void {
     var buffer: [1024]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buffer);
-    var stdin = &reader.interface;
 
     while (true) {
         try std.Io.File.stdout().writeStreamingAll(io, "> ");
-        if (try stdin.takeDelimiter('\n')) |line| {
+        if (try reader.interface.takeDelimiter('\n')) |line| {
             _ = vm.interpret(line);
         }
     }
