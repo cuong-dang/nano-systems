@@ -55,3 +55,57 @@ test "bustub::SampleTest" {
     try testing.expectEqual(2, arc.mruTargetSize);
     try testing.expectEqual(2, arc.evict());
 }
+
+test "bustub::SampleTest2" {
+    var arc: ArcReplacer = .init(testing.allocator, 3);
+    defer arc.deinit();
+
+    try arc.recordAccess(1, 1);
+    try arc.setEvictable(1, true);
+    try arc.recordAccess(2, 2);
+    try arc.setEvictable(2, true);
+    try arc.recordAccess(3, 3);
+    try arc.setEvictable(3, true);
+    try testing.expectEqual(3, arc.numEvictable);
+
+    try testing.expectEqual(1, try arc.evict());
+    try testing.expectEqual(2, try arc.evict());
+    try testing.expectEqual(3, try arc.evict());
+    try testing.expectEqual(0, arc.numEvictable);
+
+    try arc.recordAccess(3, 4);
+    try arc.setEvictable(3, true);
+    try arc.recordAccess(2, 1);
+    try arc.setEvictable(2, true);
+    try testing.expectEqual(2, arc.numEvictable);
+    try arc.recordAccess(1, 3);
+    try arc.setEvictable(1, true);
+    try testing.expectEqual(3, try arc.evict());
+    try testing.expectEqual(2, try arc.evict());
+    try testing.expectEqual(1, try arc.evict());
+
+    try arc.recordAccess(1, 1);
+    try arc.setEvictable(1, true);
+    try arc.recordAccess(2, 4);
+    try arc.setEvictable(2, true);
+    try arc.recordAccess(3, 5);
+    try arc.setEvictable(3, true);
+    try testing.expectEqual(1, try arc.evict());
+    try arc.recordAccess(1, 6);
+    try arc.setEvictable(1, true);
+    try testing.expectEqual(2, try arc.evict());
+    try arc.recordAccess(2, 7);
+    try arc.setEvictable(2, true);
+    try testing.expectEqual(3, try arc.evict());
+    try arc.recordAccess(3, 5);
+    try arc.setEvictable(3, true);
+    try testing.expectEqual(3, try arc.evict());
+    try arc.recordAccess(3, 2);
+    try arc.setEvictable(3, true);
+    try testing.expectEqual(1, try arc.evict());
+    try arc.recordAccess(1, 3);
+    try arc.setEvictable(1, true);
+    try testing.expectEqual(2, try arc.evict());
+    try testing.expectEqual(3, try arc.evict());
+    try testing.expectEqual(1, try arc.evict());
+}

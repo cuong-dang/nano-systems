@@ -43,6 +43,7 @@ pub const ArcReplacer = struct {
 
         // In MRU
         if (self.inMru.get(frameId)) |node| {
+            std.debug.print("CASE 1\n", .{});
             self.mruRemove(frameId, node);
             try self.mfuPrepend(frameId, node);
             return;
@@ -98,6 +99,50 @@ pub const ArcReplacer = struct {
         return try self.evictFromMru() orelse try self.evictFromMfu();
     }
 
+    pub fn print(self: *const ArcReplacer) void {
+        // Format from bustub.
+
+        // MRU Ghost
+        std.debug.print("[", .{});
+        var it = self.mruGhost.last;
+        while (it) |node| : (it = it.?.prev) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            std.debug.print("({},_)", .{frame.pageId});
+            if (it.?.prev != null) std.debug.print(", ", .{});
+        }
+        std.debug.print("]", .{});
+        // MRU
+        std.debug.print("[", .{});
+        it = self.mru.last;
+        while (it) |node| : (it = it.?.prev) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            std.debug.print("({},f{})", .{ frame.pageId, frame.frameId });
+            if (it.?.prev != null) std.debug.print(", ", .{});
+        }
+        std.debug.print("]!", .{});
+        // MFU
+        std.debug.print("[", .{});
+        it = self.mfu.first;
+        while (it) |node| : (it = it.?.next) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            std.debug.print("({},f{})", .{ frame.pageId, frame.frameId });
+            if (it.?.next != null) std.debug.print(", ", .{});
+        }
+        std.debug.print("]", .{});
+        // MFU Ghost
+        std.debug.print("[", .{});
+        it = self.mfuGhost.first;
+        while (it) |node| : (it = it.?.next) {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            std.debug.print("({},_)", .{frame.pageId});
+            if (it.?.next != null) std.debug.print(", ", .{});
+        }
+        std.debug.print("]", .{});
+
+        // MRU target size
+        std.debug.print(" p={}\n", .{self.mruTargetSize});
+    }
+
     fn evictFromMru(self: *ArcReplacer) !?FrameId {
         var it = self.mru.last;
         while (it) |node| : (it = node.prev) {
@@ -133,12 +178,20 @@ pub const ArcReplacer = struct {
     }
 
     fn mruPrepend(self: *ArcReplacer, frameId: FrameId, node: *Node) !void {
+        // Needs to reset frameId here because we might move from ghost lists.
+        const frame: *Frame = @fieldParentPtr("node", node);
+        frame.resetFrameId(frameId);
+
         self.mru.prepend(node);
         self.mruLen += 1;
         try self.inMru.put(frameId, node);
     }
 
     fn mfuPrepend(self: *ArcReplacer, frameId: FrameId, node: *Node) !void {
+        // Needs to reset frameId here because we might move from ghost lists.
+        const frame: *Frame = @fieldParentPtr("node", node);
+        frame.resetFrameId(frameId);
+
         self.mfu.prepend(node);
         self.mfuLen += 1;
         try self.inMfu.put(frameId, node);
@@ -201,6 +254,12 @@ const Frame = struct {
         const new = try gpa.create(Frame);
         new.* = .{ .frameId = frameId, .pageId = pageId, .node = .{} };
         return new;
+    }
+
+    pub fn resetFrameId(self: *Frame, frameId: FrameId) void {
+        self.frameId = frameId;
+        self.evictable = false;
+        // pageId stays the same.
     }
 };
 
