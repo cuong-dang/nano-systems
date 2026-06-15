@@ -2,7 +2,7 @@ const testing = @import("std").testing;
 
 const ArcReplacer = @import("./arc_replacer.zig").ArcReplacer;
 
-test "SampleTest" { // from bustub
+test "bustub::SampleTest" {
     var arc: ArcReplacer = .init(testing.allocator, 7);
     defer arc.deinit();
 
@@ -53,4 +53,5 @@ test "SampleTest" { // from bustub
     try arc.recordAccess(5, 1);
     try arc.setEvictable(5, true);
     try testing.expectEqual(2, arc.mruTargetSize);
+    try testing.expectEqual(2, arc.evict());
 }
