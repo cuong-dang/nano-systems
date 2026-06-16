@@ -6,6 +6,8 @@ const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./value.zig").Value;
 const Obj = @import("./value.zig").Obj;
 const Function = @import("./value.zig").Function;
+const NativeFn = @import("./value.zig").NativeFn;
+const NativeFnError = @import("./value.zig").NativeFnError;
 const ValueTypeTag = @import("./value.zig").ValueTypeTag;
 const ObjTypeTag = @import("./value.zig").ObjTypeTag;
 const printValue = @import("./value.zig").printValue;
@@ -26,7 +28,11 @@ pub const VM = struct {
     io: std.Io,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io) VM {
-        return .{ .globals = .init(gpa), .gpa = gpa, .io = io };
+        var vm: VM = .{ .globals = .init(gpa), .gpa = gpa, .io = io };
+        vm.resetStack();
+        vm.defineNative("clock", clockNative) catch unreachable; // sloppy
+        vm.defineNative("strlen", strlenNative) catch unreachable; // sloppy
+        return vm;
     }
 
     pub fn deinit(self: *VM) void {
@@ -54,11 +60,7 @@ pub const VM = struct {
         }
         self.push(.{ .obj = functionObj.? });
         self.objects = functionObj.?;
-        var frame = &self.frames[self.frameCount];
-        self.frameCount += 1;
-        frame.function = &functionObj.?.data.function;
-        frame.ip = frame.function.chunk.code();
-        frame.slots = &self.stack;
+        _ = self.call(&functionObj.?.data.function, 0);
 
         return self.run();
     }
@@ -91,7 +93,7 @@ pub const VM = struct {
                     const constant = frame.readConstant();
                     self.push(constant);
                 },
-                .NIL => self.push(.{ .nil = void{} }),
+                .NIL => self.push(.{ .nil = {} }),
                 .TRUE => self.push(.{ .boolean = true }),
                 .FALSE => self.push(.{ .boolean = false }),
                 .POP => _ = self.pop(),
@@ -211,8 +213,24 @@ pub const VM = struct {
                     const offset = frame.readShort();
                     frame.ip -= offset;
                 },
+                .CALL => {
+                    const argCount = frame.readByte();
+                    if (!self.callValue(self.peek(argCount), argCount)) {
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    frame = &self.frames[self.frameCount - 1];
+                },
                 .RETURN => {
-                    return .INTERPRET_OK;
+                    const result = self.pop();
+                    self.frameCount -= 1;
+                    if (self.frameCount == 0) {
+                        _ = self.pop();
+                        return .INTERPRET_OK;
+                    }
+
+                    self.stackTop = frame.slots;
+                    self.push(result);
+                    frame = &self.frames[self.frameCount - 1];
                 },
             }
         }
@@ -235,6 +253,56 @@ pub const VM = struct {
 
     fn peek(self: *const VM, distance: usize) Value {
         return (self.stackTop - 1 - distance)[0];
+    }
+
+    fn callValue(self: *VM, callee: Value, argCount: usize) bool {
+        switch (callee) {
+            .obj => |o| switch (o.data) {
+                .function => |*f| return self.call(f, argCount),
+                .nativeFn => |nf| {
+                    var err: NativeFnError = .{};
+                    const result = nf(self, argCount, self.stackTop - argCount, &err);
+                    if (!err.ok) {
+                        self.runtimeError("<native fn>: {s}", .{err.message.?});
+                        return false;
+                    }
+                    self.stackTop -= argCount + 1;
+                    self.push(result);
+                    return true;
+                },
+                else => {},
+            },
+            else => {},
+        }
+        self.runtimeError("Can only call function and classes.", .{});
+        return false;
+    }
+
+    fn call(self: *VM, function: *Function, argCount: usize) bool {
+        if (argCount != function.arity) {
+            self.runtimeError("Expected {} arguments but got {}.", .{ function.arity, argCount });
+            return false;
+        }
+
+        if (self.frameCount == FRAMES_MAX) {
+            self.runtimeError("Stack overflow.", .{});
+            return false;
+        }
+
+        var frame = &self.frames[self.frameCount];
+        self.frameCount += 1;
+        frame.function = function;
+        frame.ip = function.chunk.code();
+        frame.slots = self.stackTop - argCount - 1;
+        return true;
+    }
+
+    fn defineNative(self: *VM, name: []const u8, nativeFn: NativeFn) !void {
+        self.push(.{ .obj = try Obj.fromString(self.gpa, name) });
+        self.push(.{ .obj = try Obj.newNativeFn(self.gpa, nativeFn) });
+        try self.globals.put(name, self.stack[1]);
+        _ = self.pop();
+        _ = self.pop();
     }
 
     fn ensureNumber(self: *const VM) bool {
@@ -263,16 +331,27 @@ pub const VM = struct {
 
     fn resetStack(self: *VM) void {
         self.stackTop = &self.stack;
+        self.frameCount = 0;
     }
 
     fn runtimeError(self: *VM, comptime format: []const u8, args: anytype) void {
         std.debug.print(format, args);
         std.debug.print("\n", .{});
 
-        const frame = &self.frames[self.frameCount - 1];
-        const instruction = frame.ip - frame.function.chunk.code() - 1;
-        const line = frame.function.chunk.lineOf(instruction);
-        std.debug.print("[line {}] in script\n", .{line});
+        var i: usize = self.frameCount - 1;
+        while (true) : (i -= 1) {
+            const frame = &self.frames[i];
+            const function = frame.function;
+            const intrusction = frame.ip - function.chunk.code() - 1;
+            std.debug.print("[line {}] in ", .{function.chunk.lineOf(intrusction)});
+            if (function.name.len == 0) {
+                std.debug.print("script\n", .{});
+            } else {
+                std.debug.print("{s}()\n", .{function.name});
+            }
+            if (i == 0) break;
+        }
+
         self.resetStack();
     }
 
@@ -305,3 +384,21 @@ const CallFrame = struct {
         return short;
     }
 };
+
+fn strlenNative(vm: *VM, argCount: usize, args: [*]Value, err: *NativeFnError) Value {
+    _ = vm;
+    if (argCount == 1 and args[0] == .obj and args[0].obj.data == .string) {
+        return .{ .number = @floatFromInt(args[0].obj.data.string.len) };
+    }
+    err.* = .{ .ok = false, .message = "strlen expects 1 string argument." };
+    return .{ .nil = {} };
+}
+
+fn clockNative(vm: *VM, argCount: usize, args: [*]Value, err: *NativeFnError) Value {
+    _ = args;
+    if (argCount == 0) {
+        return .{ .number = @as(f64, @floatFromInt(std.Io.Clock.real.now(vm.io).nanoseconds)) / 1000000000 };
+    }
+    err.* = .{ .ok = false, .message = "clock expects no arguments." };
+    return .{ .nil = {} };
+}

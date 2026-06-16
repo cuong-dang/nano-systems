@@ -32,6 +32,7 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
         .JUMP => return shortInstruction(.JUMP, chunk, offset),
         .JUMP_IF_FALSE => return shortInstruction(.JUMP_IF_FALSE, chunk, offset),
         .LOOP => return shortInstruction(.LOOP, chunk, offset),
+        .CALL => return byteInstruction(.CALL, chunk, offset),
         else => |v| return simpleInstruction(v, offset),
     }
 }

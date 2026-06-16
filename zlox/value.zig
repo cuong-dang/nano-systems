@@ -34,6 +34,7 @@ pub const Value = union(ValueTypeTag) {
                 switch (v.data) {
                     .string => return std.mem.eql(u8, self.obj.data.string, b.obj.data.string),
                     .function => return std.mem.eql(u8, self.obj.data.function.name, b.obj.data.function.name),
+                    .nativeFn => |nf| return nf == b.obj.data.nativeFn,
                 }
             },
         };
@@ -46,6 +47,7 @@ pub const Value = union(ValueTypeTag) {
             .obj => |o| switch (o.data) {
                 .string => |s| std.fmt.bufPrint(buf, "'{s}'", .{s}),
                 .function => |f| std.fmt.bufPrint(buf, "<fn {s}>", .{f.name}),
+                .nativeFn => std.fmt.bufPrint(buf, "<native fn>", .{}),
             },
             .nil => std.fmt.bufPrint(buf, "nil", .{}),
         };
@@ -58,9 +60,15 @@ pub const Function = struct {
     name: []u8,
 };
 
-pub const ObjTypeTag = enum { string, function };
+pub const NativeFn = *const fn (*VM, usize, [*]Value, *NativeFnError) Value;
+pub const NativeFnError = struct {
+    ok: bool = true,
+    message: ?[]const u8 = null,
+};
 
-const ObjData = union(ObjTypeTag) { string: []u8, function: Function };
+pub const ObjTypeTag = enum { string, function, nativeFn };
+
+const ObjData = union(ObjTypeTag) { string: []u8, function: Function, nativeFn: NativeFn };
 
 pub const Obj = struct {
     data: ObjData,
@@ -73,6 +81,7 @@ pub const Obj = struct {
                 f.chunk.deinit(gpa);
                 gpa.free(f.name);
             },
+            .nativeFn => {},
         }
         gpa.destroy(self);
     }
@@ -86,7 +95,7 @@ pub const Obj = struct {
 
         var len: usize = 0;
         for (ss) |s| len += s.len;
-        obj.data.string = try gpa.alloc(u8, len);
+        obj.* = .{ .data = .{ .string = try gpa.alloc(u8, len) } };
 
         len = 0;
         for (ss) |s| {
@@ -101,6 +110,12 @@ pub const Obj = struct {
         obj.* = .{ .data = .{ .function = .{ .arity = 0, .name = "", .chunk = .init(gpa) } }, .next = null };
         return obj;
     }
+
+    pub fn newNativeFn(gpa: std.mem.Allocator, nativeFn: NativeFn) !*Obj {
+        const obj = try gpa.create(Obj);
+        obj.* = .{ .data = .{ .nativeFn = nativeFn } };
+        return obj;
+    }
 };
 
 pub fn printValue(value: Value) void {
@@ -108,6 +123,7 @@ pub fn printValue(value: Value) void {
         .obj => |v| switch (v.data) {
             .string => |s| std.debug.print("'{s}'", .{s}),
             .function => |f| if (f.name.len != 0) std.debug.print("<fn {s}>", .{f.name}) else std.debug.print("<script>", .{}),
+            .nativeFn => std.debug.print("<native fn>", .{}),
         },
         else => |v| std.debug.print("{}", .{v}),
     }

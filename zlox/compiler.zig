@@ -135,27 +135,63 @@ pub const Compiler = struct {
     }
 
     fn fun(self: *Compiler, funType: FunctionType) void {
-        var compiler = Compiler.init(self.gpa, self.vm, funType, self.scanner, self.parser) catch {
+        var funCompiler = Compiler.init(self.gpa, self.vm, funType, self.scanner, self.parser) catch {
             self.parser.hadError = true;
             return;
         };
-        defer compiler.deinit(false);
-        compiler.function.name = compiler.gpa.alloc(u8, self.parser.previous.lexeme.len) catch {
+        defer funCompiler.deinit(false);
+        funCompiler.function.name = funCompiler.gpa.alloc(u8, self.parser.previous.lexeme.len) catch {
             self.parser.hadError = true;
             return;
         };
-        @memcpy(compiler.function.name, self.parser.previous.lexeme);
-        compiler.beginScope();
-        compiler.consume(.LEFT_PAREN, "Expect '(' after function name.");
-        compiler.consume(.RIGHT_PAREN, "Expect ')' after parameters.");
-        compiler.consume(.LEFT_BRACE, "Expect '{' before function body.");
-        compiler.block();
-        const function = compiler.end();
+        @memcpy(funCompiler.function.name, self.parser.previous.lexeme);
+        funCompiler.beginScope();
+        funCompiler.consume(.LEFT_PAREN, "Expect '(' after function name.");
+        if (!funCompiler.check(.RIGHT_PAREN)) {
+            while (true) {
+                funCompiler.function.arity += 1;
+                if (funCompiler.function.arity > 255) {
+                    funCompiler.errorAtCurrent("Can't have more than 255 parameters.");
+                }
+                const constant = funCompiler.parseVariable("Expect parameter name.") catch {
+                    funCompiler.parser.hadError = true;
+                    return;
+                };
+                funCompiler.defineVariable(constant);
+                if (!funCompiler.match(.COMMA)) break;
+            }
+        }
+        funCompiler.consume(.RIGHT_PAREN, "Expect ')' after parameters.");
+        funCompiler.consume(.LEFT_BRACE, "Expect '{' before function body.");
+        funCompiler.block();
+        const function = funCompiler.end();
         self.vm.addObject(function);
         self.emitBytes(@intFromEnum(OpCode.CONSTANT), self.makeConstant(.{ .obj = function }) catch {
             self.parser.hadError = true;
             return;
         });
+    }
+
+    fn call(self: *Compiler, canAssign: bool) void {
+        _ = canAssign;
+        const argCount = self.argumentList();
+        self.emitBytes(@intFromEnum(OpCode.CALL), argCount);
+    }
+
+    fn argumentList(self: *Compiler) u8 {
+        var argCount: u8 = 0;
+        if (!self.check(.RIGHT_PAREN)) {
+            while (true) {
+                self.expression();
+                if (argCount == 255) {
+                    self.error_("Can't have more than 255 arguments.");
+                }
+                argCount += 1;
+                if (!self.match(.COMMA)) break;
+            }
+        }
+        self.consume(.RIGHT_PAREN, "Expect ')' after arguments.");
+        return argCount;
     }
 
     fn varDeclaration(self: *Compiler) void {
@@ -183,6 +219,8 @@ pub const Compiler = struct {
             self.whileStatement();
         } else if (self.match(.FOR)) {
             self.forStatement();
+        } else if (self.match(.RETURN)) {
+            self.returnStatement();
         } else if (self.match(.LEFT_BRACE)) {
             self.beginScope();
             self.block();
@@ -269,6 +307,20 @@ pub const Compiler = struct {
             self.emitOp(.POP);
         }
         self.endScope();
+    }
+
+    fn returnStatement(self: *Compiler) void {
+        if (self.functionType == .SCRIPT) {
+            self.error_("Can't return from top-level code.");
+        }
+
+        if (self.match(.SEMICOLON)) {
+            self.emitReturn();
+        } else {
+            self.expression();
+            self.consume(.SEMICOLON, "Expect ';' after return value.");
+            self.emitOp(.RETURN);
+        }
     }
 
     fn block(self: *Compiler) void {
@@ -539,6 +591,7 @@ pub const Compiler = struct {
     }
 
     fn emitReturn(self: *Compiler) void {
+        self.emitOp(.NIL);
         self.emitOp(.RETURN);
     }
 
@@ -555,7 +608,7 @@ pub const Compiler = struct {
                     }
                     return self.stringConstants.get(s).?;
                 },
-                .function => unreachable,
+                else => unreachable,
             },
             else => return try self.makeConstant(v),
         }
@@ -676,7 +729,7 @@ const ParseRule = struct { prefix: ?ParseFn, infix: ?ParseFn, precedence: Preced
 const rules = blk: {
     var r: [@intFromEnum(TokenType.EOF) + 1]ParseRule = undefined;
 
-    r[@intFromEnum(TokenType.LEFT_PAREN)] = .{ .prefix = Compiler.grouping, .infix = null, .precedence = .NONE };
+    r[@intFromEnum(TokenType.LEFT_PAREN)] = .{ .prefix = Compiler.grouping, .infix = Compiler.call, .precedence = .CALL };
     r[@intFromEnum(TokenType.RIGHT_PAREN)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.LEFT_BRACE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
     r[@intFromEnum(TokenType.RIGHT_BRACE)] = .{ .prefix = null, .infix = null, .precedence = .NONE };
