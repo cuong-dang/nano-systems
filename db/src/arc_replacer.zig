@@ -40,10 +40,8 @@ pub const ArcReplacer = struct {
     }
 
     pub fn recordAccess(self: *ArcReplacer, frameId: FrameId, pageId: PageId) !void {
-
         // In MRU
         if (self.inMru.get(frameId)) |node| {
-            std.debug.print("CASE 1\n", .{});
             self.mruRemove(frameId, node);
             try self.mfuPrepend(frameId, node);
             return;
@@ -73,11 +71,11 @@ pub const ArcReplacer = struct {
             return;
         }
         // Not in the replacer
-        if (self.mru.len() + self.mruGhostLen == self.size) {
+        if (self.mruLen + self.mruGhostLen == self.size) {
             self.mruGhostKillLast();
         } else {
-            std.debug.assert(self.mru.len() + self.mruGhostLen < self.size);
-            if (self.mru.len() + self.mruGhostLen + self.mfu.len() + self.mfuGhostLen == 2 * self.size) {
+            std.debug.assert(self.mruLen + self.mruGhostLen < self.size);
+            if (self.mruLen + self.mruGhostLen + self.mfuLen + self.mfuGhostLen == 2 * self.size) {
                 self.mfuGhostKillLast();
             }
         }
@@ -93,10 +91,39 @@ pub const ArcReplacer = struct {
     }
 
     pub fn evict(self: *ArcReplacer) !?FrameId {
-        if (self.mru.len() < self.mruTargetSize) {
+        if (self.mruLen < self.mruTargetSize) {
             return try self.evictFromMfu() orelse try self.evictFromMru();
         }
         return try self.evictFromMru() orelse try self.evictFromMfu();
+    }
+
+    pub fn remove(self: *ArcReplacer, frameId: FrameId) void {
+        if (self.mruRemoveIfExists(frameId)) return;
+        _ = self.mfuRemoveIfExists(frameId);
+    }
+
+    fn mruRemoveIfExists(self: *ArcReplacer, frameId: FrameId) bool {
+        if (self.inMru.get(frameId)) |node| {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            if (frame.evictable) {
+                self.mruRemove(frameId, node);
+                self.numEvictable -= 1;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn mfuRemoveIfExists(self: *ArcReplacer, frameId: FrameId) bool {
+        if (self.inMfu.get(frameId)) |node| {
+            const frame: *Frame = @fieldParentPtr("node", node);
+            if (frame.evictable) {
+                self.mfuRemove(frameId, node);
+                self.numEvictable -= 1;
+                return true;
+            }
+        }
+        return false;
     }
 
     pub fn print(self: *const ArcReplacer) void {
@@ -258,7 +285,6 @@ const Frame = struct {
 
     pub fn resetFrameId(self: *Frame, frameId: FrameId) void {
         self.frameId = frameId;
-        self.evictable = false;
         // pageId stays the same.
     }
 };
