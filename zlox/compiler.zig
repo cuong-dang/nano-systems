@@ -30,7 +30,7 @@ pub const Compiler = struct {
 
     pub fn init(gpa: std.mem.Allocator, vm: *VM, funType: FunctionType, scanner: ?*Scanner, parser: ?*Parser) !*Compiler {
         const compiler = try gpa.create(Compiler);
-        compiler.* = Compiler{ .gpa = gpa, .stringConstants = .init(gpa), .vm = vm, .functionObj = try Obj.newFunction(gpa), .functionType = funType };
+        compiler.* = Compiler{ .gpa = gpa, .stringConstants = .init(gpa), .vm = vm, .functionObj = try Obj.newFunction(vm), .functionType = funType };
         compiler.function = &compiler.functionObj.data.function;
 
         if (scanner) |s| {
@@ -442,11 +442,10 @@ pub const Compiler = struct {
 
     fn string(self: *Compiler, canAssign: bool) void {
         _ = canAssign;
-        const obj = Obj.fromString(self.gpa, self.parser.previous.lexeme) catch {
+        const obj = Obj.fromString(self.vm, self.parser.previous.lexeme) catch {
             self.parser.hadError = true;
             return;
         };
-        self.vm.addObject(obj);
         self.emitConstant(.{ .obj = obj }) catch {
             self.parser.hadError = true;
             return;
@@ -558,7 +557,7 @@ pub const Compiler = struct {
     }
 
     fn identifierConstant(self: *Compiler, name: []const u8) !u8 {
-        return try self.resolveConstant(try Value.fromIdentifier(self.gpa, name));
+        return try self.resolveConstant(try Value.fromIdentifier(self.vm, name));
     }
 
     fn defineVariable(self: *Compiler, global: u8) void {

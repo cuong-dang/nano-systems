@@ -38,9 +38,9 @@ pub const VM = struct {
     pub fn deinit(self: *VM) void {
         // Free objects.
         var obj: ?*Obj = self.objects;
-        while (obj != null) {
-            const next = obj.?.next;
-            obj.?.deinit(self.gpa);
+        while (obj) |o| {
+            const next = o.next;
+            o.deinit(self);
             obj = next;
         }
         self.globals.deinit();
@@ -149,8 +149,7 @@ pub const VM = struct {
                     switch (a) {
                         .number => self.push(.{ .number = a.number + b.number }),
                         .obj => {
-                            const obj = Obj.fromStrings(self.gpa, &[_][]const u8{ a.obj.data.string, b.obj.data.string }) catch return self.allocError();
-                            self.addObject(obj);
+                            const obj = Obj.fromStrings(self, &[_][]const u8{ a.obj.data.string, b.obj.data.string }) catch return self.allocError();
                             self.push(.{ .obj = obj });
                         },
                         else => unreachable,
@@ -298,8 +297,8 @@ pub const VM = struct {
     }
 
     fn defineNative(self: *VM, name: []const u8, nativeFn: NativeFn) !void {
-        self.push(.{ .obj = try Obj.fromString(self.gpa, name) });
-        self.push(.{ .obj = try Obj.newNativeFn(self.gpa, nativeFn) });
+        self.push(.{ .obj = try Obj.fromString(self, name) });
+        self.push(.{ .obj = try Obj.newNativeFn(self, nativeFn) });
         try self.globals.put(name, self.stack[1]);
         _ = self.pop();
         _ = self.pop();

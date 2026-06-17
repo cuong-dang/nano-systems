@@ -5,14 +5,17 @@ const VM = @import("./vm.zig").VM;
 
 pub const ValueTypeTag = enum { boolean, number, obj, nil };
 
+// Values are owned by VM.
 pub const Value = union(ValueTypeTag) {
     boolean: bool,
     number: f64,
     obj: *Obj,
     nil: void,
 
-    pub fn fromIdentifier(gpa: std.mem.Allocator, s: []const u8) !Value {
-        return .{ .obj = try Obj.fromStrings(gpa, &[_][]const u8{s}) };
+    pub fn fromIdentifier(vm: *VM, s: []const u8) !Value {
+        const obj = try Obj.fromStrings(vm, &[_][]const u8{s});
+        vm.addObject(obj);
+        return .{ .obj = obj };
     }
 
     pub fn asBool(self: *const Value) bool {
@@ -54,48 +57,40 @@ pub const Value = union(ValueTypeTag) {
     }
 };
 
-pub const Function = struct {
-    arity: usize,
-    chunk: Chunk,
-    name: []u8,
-};
-
-pub const NativeFn = *const fn (*VM, usize, [*]Value, *NativeFnError) Value;
-pub const NativeFnError = struct {
-    ok: bool = true,
-    message: ?[]const u8 = null,
-};
-
 pub const ObjTypeTag = enum { string, function, nativeFn };
 
 const ObjData = union(ObjTypeTag) { string: []u8, function: Function, nativeFn: NativeFn };
 
+// Objects are owned by VM.
 pub const Obj = struct {
     data: ObjData,
     next: ?*Obj = null,
 
-    pub fn deinit(self: *Obj, gpa: std.mem.Allocator) void {
+    pub fn deinit(self: *Obj, vm: *VM) void {
         switch (self.data) {
-            .string => |s| gpa.free(s),
+            .string => |s| vm.gpa.free(s),
             .function => |*f| {
-                f.chunk.deinit(gpa);
-                gpa.free(f.name);
+                f.chunk.deinit(vm.gpa);
+                if (f.name.len != 0) {
+                    vm.gpa.free(f.name);
+                }
             },
             .nativeFn => {},
         }
-        gpa.destroy(self);
+        vm.gpa.destroy(self);
     }
 
-    pub fn fromString(gpa: std.mem.Allocator, s: []const u8) !*Obj {
-        return try fromStrings(gpa, &[_][]const u8{s[1 .. s.len - 1]});
+    pub fn fromString(vm: *VM, s: []const u8) !*Obj {
+        return try fromStrings(vm, &[_][]const u8{s[1 .. s.len - 1]});
     }
 
-    pub fn fromStrings(gpa: std.mem.Allocator, ss: []const []const u8) !*Obj {
-        var obj = try gpa.create(Obj);
+    pub fn fromStrings(vm: *VM, ss: []const []const u8) !*Obj {
+        var obj = try vm.gpa.create(Obj);
+        vm.addObject(obj);
 
         var len: usize = 0;
         for (ss) |s| len += s.len;
-        obj.* = .{ .data = .{ .string = try gpa.alloc(u8, len) } };
+        obj.* = .{ .data = .{ .string = try vm.gpa.alloc(u8, len) } };
 
         len = 0;
         for (ss) |s| {
@@ -105,17 +100,32 @@ pub const Obj = struct {
         return obj;
     }
 
-    pub fn newFunction(gpa: std.mem.Allocator) !*Obj {
-        const obj = try gpa.create(Obj);
-        obj.* = .{ .data = .{ .function = .{ .arity = 0, .name = "", .chunk = .init(gpa) } }, .next = null };
+    pub fn newFunction(vm: *VM) !*Obj {
+        const obj = try vm.gpa.create(Obj);
+        vm.addObject(obj);
+        obj.* = .{ .data = .{ .function = .{ .arity = 0, .name = "", .chunk = .init(vm.gpa) } }, .next = null };
         return obj;
     }
 
-    pub fn newNativeFn(gpa: std.mem.Allocator, nativeFn: NativeFn) !*Obj {
-        const obj = try gpa.create(Obj);
+    pub fn newNativeFn(vm: *VM, nativeFn: NativeFn) !*Obj {
+        const obj = try vm.gpa.create(Obj);
+        vm.addObject(obj);
         obj.* = .{ .data = .{ .nativeFn = nativeFn } };
         return obj;
     }
+};
+
+pub const Function = struct {
+    arity: usize,
+    chunk: Chunk,
+    name: []u8,
+};
+
+pub const NativeFn = *const fn (*VM, usize, [*]Value, *NativeFnError) Value;
+
+pub const NativeFnError = struct {
+    ok: bool = true,
+    message: ?[]const u8 = null,
 };
 
 pub fn printValue(value: Value) void {
