@@ -109,3 +109,12 @@ test "bustub::SampleTest2" {
     try testing.expectEqual(3, try arc.evict());
     try testing.expectEqual(1, try arc.evict());
 }
+
+test "remove" {
+    var arc: ArcReplacer = .init(testing.allocator, testing.io, 7);
+    defer arc.deinit();
+
+    try arc.recordAccess(1, 1);
+    try arc.setEvictable(1, true);
+    try arc.remove(1);
+}

@@ -108,7 +108,7 @@ pub const ArcReplacer = struct {
         return try self.evictFrom(&self.mru, &self.mruGhost) orelse try self.evictFrom(&self.mfu, &self.mfuGhost);
     }
 
-    pub fn remove(self: *ArcReplacer, frameId: usize) void {
+    pub fn remove(self: *ArcReplacer, frameId: usize) !void {
         try self.mu.lock(self.io);
         defer self.mu.unlock(self.io);
 
@@ -188,6 +188,7 @@ pub const ArcReplacer = struct {
             const frame: *Frame = @fieldParentPtr("node", node);
             if (frame.evictable) {
                 list.remove(frameId, node);
+                self.gpa.destroy(frame);
                 self.numEvictable -= 1;
                 return true;
             }
