@@ -25,9 +25,8 @@ pub fn Channel(comptime T: type) type {
 
             self.mu.lockUncancelable(self.io);
             self.q.append(&new.node);
-            self.mu.unlock(self.io);
-
             self.cond.signal(self.io);
+            self.mu.unlock(self.io);
         }
 
         pub fn get(self: *Channel(T)) T {
