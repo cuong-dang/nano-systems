@@ -32,7 +32,7 @@ pub const ArcReplacer = struct {
     }
 
     pub fn recordAccess(self: *ArcReplacer, frameId: usize, pageId: usize) !void {
-        try self.mu.lock(self.io);
+        self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         // In MRU
@@ -89,7 +89,7 @@ pub const ArcReplacer = struct {
     }
 
     pub fn setEvictable(self: *ArcReplacer, frameId: usize, evictable: bool) !void {
-        try self.mu.lock(self.io);
+        self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         const node = self.mru.get(frameId) orelse self.mfu.get(frameId) orelse return Error.FrameNotFound;
@@ -99,7 +99,7 @@ pub const ArcReplacer = struct {
     }
 
     pub fn evict(self: *ArcReplacer) !?usize {
-        try self.mu.lock(self.io);
+        self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         if (self.mru.len < self.mruTargetSize) {
@@ -108,8 +108,8 @@ pub const ArcReplacer = struct {
         return try self.evictFrom(&self.mru, &self.mruGhost) orelse try self.evictFrom(&self.mfu, &self.mfuGhost);
     }
 
-    pub fn remove(self: *ArcReplacer, frameId: usize) !void {
-        try self.mu.lock(self.io);
+    pub fn remove(self: *ArcReplacer, frameId: usize) void {
+        self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         if (self.removeIfExists(frameId, &self.mru)) return;
@@ -117,7 +117,7 @@ pub const ArcReplacer = struct {
     }
 
     pub fn print(self: *ArcReplacer) !void {
-        try self.mu.lock(self.io);
+        self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         // Format from bustub.
