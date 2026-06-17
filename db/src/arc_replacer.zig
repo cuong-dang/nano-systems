@@ -3,135 +3,127 @@ const Node = std.DoublyLinkedList.Node;
 
 pub const ArcReplacer = struct {
     gpa: std.mem.Allocator,
+    io: std.Io,
+    mu: std.Io.Mutex = .init,
 
     size: usize,
     numEvictable: usize = 0,
     mruTargetSize: usize = 0,
 
-    mru: std.DoublyLinkedList = .{},
-    mfu: std.DoublyLinkedList = .{},
-    mruLen: usize = 0,
-    mfuLen: usize = 0,
-    inMru: std.AutoHashMap(FrameId, *Node),
-    inMfu: std.AutoHashMap(FrameId, *Node),
+    mru: List,
+    mfu: List,
+    mruGhost: List,
+    mfuGhost: List,
 
-    mruGhost: std.DoublyLinkedList = .{},
-    mfuGhost: std.DoublyLinkedList = .{},
-    mruGhostLen: usize = 0,
-    mfuGhostLen: usize = 0,
-    inMruGhost: std.AutoHashMap(PageId, *Node),
-    inMfuGhost: std.AutoHashMap(PageId, *Node),
-
-    pub fn init(gpa: std.mem.Allocator, size: usize) ArcReplacer {
-        return .{ .gpa = gpa, .size = size, .inMru = .init(gpa), .inMfu = .init(gpa), .inMruGhost = .init(gpa), .inMfuGhost = .init(gpa) };
+    pub fn init(gpa: std.mem.Allocator, io: std.Io, size: usize) ArcReplacer {
+        return .{ .gpa = gpa, .io = io, .size = size, .mru = .init(gpa), .mfu = .init(gpa), .mruGhost = .init(gpa), .mfuGhost = .init(gpa) };
     }
 
     pub fn deinit(self: *ArcReplacer) void {
-        // Destroy frames
-        destroyFrames(self.gpa, &self.mru);
-        destroyFrames(self.gpa, &self.mfu);
-        destroyFrames(self.gpa, &self.mruGhost);
-        destroyFrames(self.gpa, &self.mfuGhost);
+        self.destroyFrames(&self.mru);
+        self.destroyFrames(&self.mfu);
+        self.destroyFrames(&self.mruGhost);
+        self.destroyFrames(&self.mfuGhost);
 
-        self.inMru.deinit();
-        self.inMfu.deinit();
-        self.inMruGhost.deinit();
-        self.inMfuGhost.deinit();
+        self.mru.deinit();
+        self.mfu.deinit();
+        self.mruGhost.deinit();
+        self.mfuGhost.deinit();
     }
 
-    pub fn recordAccess(self: *ArcReplacer, frameId: FrameId, pageId: PageId) !void {
+    pub fn recordAccess(self: *ArcReplacer, frameId: usize, pageId: usize) !void {
+        try self.mu.lock(self.io);
+        defer self.mu.unlock(self.io);
+
         // In MRU
-        if (self.inMru.get(frameId)) |node| {
-            self.mruRemove(frameId, node);
-            try self.mfuPrepend(frameId, node);
+        if (self.mru.get(frameId)) |node| {
+            self.mru.remove(frameId, node);
+            try self.mfu.prepend(frameId, node);
             return;
         }
+
         // In MFU
-        if (self.inMfu.get(frameId)) |node| {
-            self.mfu.remove(node);
-            self.mfu.prepend(node);
+        if (self.mfu.get(frameId)) |node| {
+            self.mfu.remove(frameId, node);
+            try self.mfu.prepend(frameId, node);
             return;
         }
 
         // In MRU Ghost
-        if (self.inMruGhost.get(pageId)) |node| {
-            if (self.mruGhostLen >= self.mfuGhostLen) self.mruTargetSize += 1 else self.mruTargetSize += self.mfuGhostLen / self.mruGhostLen;
+        if (self.mruGhost.get(pageId)) |node| {
+            if (self.mruGhost.len >= self.mfuGhost.len) self.mruTargetSize += 1 else self.mruTargetSize += self.mfuGhost.len / self.mruGhost.len;
             if (self.mruTargetSize > self.size) self.mruTargetSize = self.size;
 
-            self.mruGhostRemove(pageId, node);
-            try self.mfuPrepend(frameId, node);
-            return;
-        }
-        // In MFU Ghost
-        if (self.inMfuGhost.get(pageId)) |node| {
-            if (self.mfuGhostLen >= self.mruGhostLen) self.mruTargetSize -|= 1 else self.mruTargetSize -|= self.mruGhostLen / self.mfuGhostLen;
+            // Reset frame when moving from ghost lists.
+            const frame: *Frame = @fieldParentPtr("node", node);
+            frame.reset(frameId);
 
-            self.mfuGhostRemove(pageId, node);
-            try self.mfuPrepend(frameId, node);
+            self.mruGhost.remove(pageId, node);
+            try self.mfu.prepend(frameId, node);
             return;
         }
+
+        // In MFU Ghost
+        if (self.mfuGhost.get(pageId)) |node| {
+            if (self.mfuGhost.len >= self.mruGhost.len) self.mruTargetSize -|= 1 else self.mruTargetSize -|= self.mruGhost.len / self.mfuGhost.len;
+
+            // Reset frame when moving from ghost lists.
+            const frame: *Frame = @fieldParentPtr("node", node);
+            frame.reset(frameId);
+
+            self.mfuGhost.remove(pageId, node);
+            try self.mfu.prepend(frameId, node);
+            return;
+        }
+
         // Not in the replacer
-        if (self.mruLen + self.mruGhostLen == self.size) {
-            self.mruGhostKillLast();
+        if (self.mru.len + self.mruGhost.len == self.size) {
+            self.killLast(&self.mruGhost);
         } else {
-            std.debug.assert(self.mruLen + self.mruGhostLen < self.size);
-            if (self.mruLen + self.mruGhostLen + self.mfuLen + self.mfuGhostLen == 2 * self.size) {
-                self.mfuGhostKillLast();
+            if (self.mru.len + self.mruGhost.len + self.mfu.len + self.mfuGhost.len == 2 * self.size) {
+                self.killLast(&self.mfuGhost);
             }
         }
         const frame = try Frame.create(self.gpa, frameId, pageId);
-        try self.mruPrepend(frameId, &frame.node);
+        try self.mru.prepend(frameId, &frame.node);
     }
 
-    pub fn setEvictable(self: *ArcReplacer, frameId: FrameId, evictable: bool) !void {
-        const node = self.inMru.get(frameId) orelse self.inMfu.get(frameId) orelse return Error.FrameNotFound;
+    pub fn setEvictable(self: *ArcReplacer, frameId: usize, evictable: bool) !void {
+        try self.mu.lock(self.io);
+        defer self.mu.unlock(self.io);
+
+        const node = self.mru.get(frameId) orelse self.mfu.get(frameId) orelse return Error.FrameNotFound;
         var frame: *Frame = @fieldParentPtr("node", node);
         if (!frame.evictable and evictable) self.numEvictable += 1 else if (frame.evictable and !evictable) self.numEvictable -= 1;
         frame.evictable = evictable;
     }
 
-    pub fn evict(self: *ArcReplacer) !?FrameId {
-        if (self.mruLen < self.mruTargetSize) {
-            return try self.evictFromMfu() orelse try self.evictFromMru();
+    pub fn evict(self: *ArcReplacer) !?usize {
+        try self.mu.lock(self.io);
+        defer self.mu.unlock(self.io);
+
+        if (self.mru.len < self.mruTargetSize) {
+            return try self.evictFrom(&self.mfu, &self.mfuGhost) orelse try self.evictFrom(&self.mru, &self.mruGhost);
         }
-        return try self.evictFromMru() orelse try self.evictFromMfu();
+        return try self.evictFrom(&self.mru, &self.mruGhost) orelse try self.evictFrom(&self.mfu, &self.mfuGhost);
     }
 
-    pub fn remove(self: *ArcReplacer, frameId: FrameId) void {
-        if (self.mruRemoveIfExists(frameId)) return;
-        _ = self.mfuRemoveIfExists(frameId);
+    pub fn remove(self: *ArcReplacer, frameId: usize) void {
+        try self.mu.lock(self.io);
+        defer self.mu.unlock(self.io);
+
+        if (self.removeIfExists(frameId, &self.mru)) return;
+        _ = self.removeIfExists(frameId, &self.mfu);
     }
 
-    fn mruRemoveIfExists(self: *ArcReplacer, frameId: FrameId) bool {
-        if (self.inMru.get(frameId)) |node| {
-            const frame: *Frame = @fieldParentPtr("node", node);
-            if (frame.evictable) {
-                self.mruRemove(frameId, node);
-                self.numEvictable -= 1;
-                return true;
-            }
-        }
-        return false;
-    }
+    pub fn print(self: *ArcReplacer) !void {
+        try self.mu.lock(self.io);
+        defer self.mu.unlock(self.io);
 
-    fn mfuRemoveIfExists(self: *ArcReplacer, frameId: FrameId) bool {
-        if (self.inMfu.get(frameId)) |node| {
-            const frame: *Frame = @fieldParentPtr("node", node);
-            if (frame.evictable) {
-                self.mfuRemove(frameId, node);
-                self.numEvictable -= 1;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    pub fn print(self: *const ArcReplacer) void {
         // Format from bustub.
-
         // MRU Ghost
         std.debug.print("[", .{});
-        var it = self.mruGhost.last;
+        var it = self.mruGhost.list.last;
         while (it) |node| : (it = it.?.prev) {
             const frame: *Frame = @fieldParentPtr("node", node);
             std.debug.print("({},_)", .{frame.pageId});
@@ -140,7 +132,7 @@ pub const ArcReplacer = struct {
         std.debug.print("]", .{});
         // MRU
         std.debug.print("[", .{});
-        it = self.mru.last;
+        it = self.mru.list.last;
         while (it) |node| : (it = it.?.prev) {
             const frame: *Frame = @fieldParentPtr("node", node);
             std.debug.print("({},f{})", .{ frame.pageId, frame.frameId });
@@ -149,7 +141,7 @@ pub const ArcReplacer = struct {
         std.debug.print("]!", .{});
         // MFU
         std.debug.print("[", .{});
-        it = self.mfu.first;
+        it = self.mfu.list.first;
         while (it) |node| : (it = it.?.next) {
             const frame: *Frame = @fieldParentPtr("node", node);
             std.debug.print("({},f{})", .{ frame.pageId, frame.frameId });
@@ -158,7 +150,7 @@ pub const ArcReplacer = struct {
         std.debug.print("]", .{});
         // MFU Ghost
         std.debug.print("[", .{});
-        it = self.mfuGhost.first;
+        it = self.mfuGhost.list.first;
         while (it) |node| : (it = it.?.next) {
             const frame: *Frame = @fieldParentPtr("node", node);
             std.debug.print("({},_)", .{frame.pageId});
@@ -170,144 +162,104 @@ pub const ArcReplacer = struct {
         std.debug.print(" p={}\n", .{self.mruTargetSize});
     }
 
-    fn evictFromMru(self: *ArcReplacer) !?FrameId {
-        var it = self.mru.last;
+    fn killLast(self: *ArcReplacer, ghostList: *List) void {
+        const last = ghostList.last().?;
+        const frame: *Frame = @fieldParentPtr("node", last);
+        ghostList.remove(frame.pageId, last);
+        self.gpa.destroy(frame);
+    }
+
+    fn evictFrom(self: *ArcReplacer, list: *List, ghostList: *List) !?usize {
+        var it = list.last();
         while (it) |node| : (it = node.prev) {
             const frame: *Frame = @fieldParentPtr("node", node);
             if (frame.evictable) {
-                self.mruRemove(frame.frameId, node);
-
+                list.remove(frame.frameId, node);
+                try ghostList.prepend(frame.pageId, node);
                 self.numEvictable -= 1;
-                frame.evictable = false; // reset before moving into ghost list
-
-                try self.mruGhostPrepend(frame.pageId, node);
                 return frame.frameId;
             }
         }
         return null;
     }
 
-    fn evictFromMfu(self: *ArcReplacer) !?FrameId {
-        var it = self.mfu.last;
-        while (it) |node| : (it = node.prev) {
+    fn removeIfExists(self: *ArcReplacer, frameId: usize, list: *List) bool {
+        if (list.get(frameId)) |node| {
             const frame: *Frame = @fieldParentPtr("node", node);
             if (frame.evictable) {
-                self.mfuRemove(frame.frameId, node);
-
+                list.remove(frameId, node);
                 self.numEvictable -= 1;
-                frame.evictable = false; // reset before moving into ghost list
-
-                try self.mfuGhostPrepend(frame.pageId, node);
-                return frame.frameId;
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
-    fn mruPrepend(self: *ArcReplacer, frameId: FrameId, node: *Node) !void {
-        // Needs to reset frameId here because we might move from ghost lists.
-        const frame: *Frame = @fieldParentPtr("node", node);
-        frame.resetFrameId(frameId);
+    fn destroyFrames(self: *ArcReplacer, list: *List) void {
+        var it = list.last();
+        while (it) |node| {
+            it = node.prev;
+            const frame: *Frame = @fieldParentPtr("node", node);
+            self.gpa.destroy(frame);
+        }
+    }
+};
 
-        self.mru.prepend(node);
-        self.mruLen += 1;
-        try self.inMru.put(frameId, node);
+const List = struct {
+    list: std.DoublyLinkedList = .{},
+    len: usize = 0,
+    lookup: std.AutoHashMap(usize, *Node),
+
+    pub fn init(gpa: std.mem.Allocator) List {
+        return .{ .lookup = .init(gpa) };
     }
 
-    fn mfuPrepend(self: *ArcReplacer, frameId: FrameId, node: *Node) !void {
-        // Needs to reset frameId here because we might move from ghost lists.
-        const frame: *Frame = @fieldParentPtr("node", node);
-        frame.resetFrameId(frameId);
-
-        self.mfu.prepend(node);
-        self.mfuLen += 1;
-        try self.inMfu.put(frameId, node);
+    pub fn deinit(self: *List) void {
+        self.lookup.deinit();
     }
 
-    fn mruRemove(self: *ArcReplacer, frameId: FrameId, node: *Node) void {
-        self.mru.remove(node);
-        self.mruLen -= 1;
-        _ = self.inMru.remove(frameId);
+    pub fn get(self: *const List, id: usize) ?*Node {
+        return self.lookup.get(id);
     }
 
-    fn mfuRemove(self: *ArcReplacer, frameId: FrameId, node: *Node) void {
-        self.mfu.remove(node);
-        self.mfuLen -= 1;
-        _ = self.inMfu.remove(frameId);
+    pub fn last(self: *const List) ?*Node {
+        return self.list.last;
     }
 
-    fn mruGhostPrepend(self: *ArcReplacer, pageId: PageId, node: *Node) !void {
-        self.mruGhost.prepend(node);
-        self.mruGhostLen += 1;
-        try self.inMruGhost.put(pageId, node);
+    pub fn remove(self: *List, id: usize, node: *Node) void {
+        self.list.remove(node);
+        self.len -= 1;
+        _ = self.lookup.remove(id);
     }
 
-    fn mfuGhostPrepend(self: *ArcReplacer, pageId: PageId, node: *Node) !void {
-        self.mfuGhost.prepend(node);
-        self.mfuGhostLen += 1;
-        try self.inMfuGhost.put(pageId, node);
-    }
-
-    fn mruGhostRemove(self: *ArcReplacer, pageId: PageId, node: *Node) void {
-        self.mruGhost.remove(node);
-        self.mruGhostLen -= 1;
-        _ = self.inMruGhost.remove(pageId);
-    }
-
-    fn mfuGhostRemove(self: *ArcReplacer, pageId: PageId, node: *Node) void {
-        self.mfuGhost.remove(node);
-        self.mfuGhostLen -= 1;
-        _ = self.inMfuGhost.remove(pageId);
-    }
-
-    fn mruGhostKillLast(self: *ArcReplacer) void {
-        killLast(self.gpa, &self.mruGhost, &self.inMruGhost);
-        self.mruGhostLen -= 1;
-    }
-
-    fn mfuGhostKillLast(self: *ArcReplacer) void {
-        killLast(self.gpa, &self.mfuGhost, &self.inMfuGhost);
-        self.mfuGhostLen -= 1;
+    pub fn prepend(self: *List, id: usize, node: *Node) !void {
+        self.list.prepend(node);
+        self.len += 1;
+        try self.lookup.put(id, node);
     }
 };
 
 const Frame = struct {
-    frameId: FrameId,
-    pageId: PageId,
+    frameId: usize,
+    pageId: usize,
     evictable: bool = false,
     node: Node,
 
-    pub fn create(gpa: std.mem.Allocator, frameId: FrameId, pageId: PageId) !*Frame {
+    pub fn create(gpa: std.mem.Allocator, frameId: usize, pageId: usize) !*Frame {
         const new = try gpa.create(Frame);
         new.* = .{ .frameId = frameId, .pageId = pageId, .node = .{} };
         return new;
     }
 
-    pub fn resetFrameId(self: *Frame, frameId: FrameId) void {
+    pub fn destroy(self: *Frame, gpa: std.mem.Allocator) void {
+        gpa.destroy(self);
+    }
+
+    pub fn reset(self: *Frame, frameId: usize) void {
         self.frameId = frameId;
+        self.evictable = false;
         // pageId stays the same.
     }
 };
-
-const FrameId = usize;
-const PageId = usize;
-
-fn killLast(gpa: std.mem.Allocator, list: *std.DoublyLinkedList, lookup: *std.AutoHashMap(PageId, *Node)) void {
-    std.debug.assert(list.len() > 0);
-    const last = list.last.?;
-    const frame: *Frame = @fieldParentPtr("node", last);
-    list.remove(last);
-    _ = lookup.remove(frame.pageId);
-    gpa.destroy(frame);
-}
-
-fn destroyFrames(gpa: std.mem.Allocator, list: *std.DoublyLinkedList) void {
-    var it = list.first;
-    while (it) |node| {
-        it = node.next;
-        const frame: *Frame = @fieldParentPtr("node", node);
-        gpa.destroy(frame);
-    }
-}
 
 const Error = error{FrameNotFound};

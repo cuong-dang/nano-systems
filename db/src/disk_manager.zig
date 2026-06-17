@@ -4,12 +4,13 @@ const page = @import("./page.zig");
 pub const DiskManager = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
+    mu: std.Io.Mutex = .init,
+
     file: std.Io.File,
     pages: std.AutoHashMap(usize, usize),
     pageCapacity: usize = initPageCapacity,
     freeSlots: std.ArrayList(usize) = .empty,
     buf: [page.size]u8 = undefined,
-    mu: std.Io.Mutex = std.Io.Mutex.init,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io, dbFilePath: []const u8) !DiskManager {
         const file = std.Io.Dir.openFileAbsolute(io, dbFilePath, .{ .mode = .read_write }) catch |err| switch (err) {
