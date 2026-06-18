@@ -38,6 +38,7 @@ pub const Value = union(ValueTypeTag) {
                     .string => return std.mem.eql(u8, self.obj.data.string, b.obj.data.string),
                     .function => return std.mem.eql(u8, self.obj.data.function.name, b.obj.data.function.name),
                     .nativeFn => |nf| return nf == b.obj.data.nativeFn,
+                    .closure => unreachable,
                 }
             },
         };
@@ -51,15 +52,16 @@ pub const Value = union(ValueTypeTag) {
                 .string => |s| std.fmt.bufPrint(buf, "'{s}'", .{s}),
                 .function => |f| std.fmt.bufPrint(buf, "<fn {s}>", .{f.name}),
                 .nativeFn => std.fmt.bufPrint(buf, "<native fn>", .{}),
+                .closure => |c| std.fmt.bufPrint(buf, "<cfn {s}>", .{c.function.name}),
             },
             .nil => std.fmt.bufPrint(buf, "nil", .{}),
         };
     }
 };
 
-pub const ObjTypeTag = enum { string, function, nativeFn };
+pub const ObjTypeTag = enum { string, function, nativeFn, closure };
 
-const ObjData = union(ObjTypeTag) { string: []u8, function: Function, nativeFn: NativeFn };
+const ObjData = union(ObjTypeTag) { string: []u8, function: Function, nativeFn: NativeFn, closure: Closure };
 
 // Objects are owned by VM.
 pub const Obj = struct {
@@ -76,6 +78,7 @@ pub const Obj = struct {
                 }
             },
             .nativeFn => {},
+            .closure => {},
         }
         vm.gpa.destroy(self);
     }
@@ -113,6 +116,13 @@ pub const Obj = struct {
         obj.* = .{ .data = .{ .nativeFn = nativeFn } };
         return obj;
     }
+
+    pub fn newClosure(vm: *VM, function: *Function) !*Obj {
+        const obj = try vm.gpa.create(Obj);
+        vm.addObject(obj);
+        obj.* = .{ .data = .{ .closure = .{ .function = function } } };
+        return obj;
+    }
 };
 
 pub const Function = struct {
@@ -128,12 +138,17 @@ pub const NativeFnError = struct {
     message: ?[]const u8 = null,
 };
 
+pub const Closure = struct {
+    function: *Function,
+};
+
 pub fn printValue(value: Value) void {
     switch (value) {
         .obj => |v| switch (v.data) {
             .string => |s| std.debug.print("'{s}'", .{s}),
             .function => |f| if (f.name.len != 0) std.debug.print("<fn {s}>", .{f.name}) else std.debug.print("<script>", .{}),
             .nativeFn => std.debug.print("<native fn>", .{}),
+            .closure => |c| std.debug.print("<cfn {s}>", .{c.function.name}),
         },
         else => |v| std.debug.print("{}", .{v}),
     }
