@@ -4,15 +4,15 @@ const page = @import("./page.zig");
 pub const DiskManager = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
-    mu: std.Io.Mutex = .init,
 
     file: std.Io.File,
-    pages: std.AutoHashMap(usize, usize),
+    pages: std.AutoHashMap(usize, usize), // page id -> offset
     pageCapacity: usize = initPageCapacity,
     freeSlots: std.ArrayList(usize) = .empty,
     buf: [page.size]u8 = undefined,
 
     pub fn init(gpa: std.mem.Allocator, io: std.Io, dbFilePath: []const u8) !DiskManager {
+        // Open or create a new file.
         const file = std.Io.Dir.openFileAbsolute(io, dbFilePath, .{ .mode = .read_write }) catch |err| switch (err) {
             error.FileNotFound => blk: {
                 const new = try std.Io.Dir.createFileAbsolute(io, dbFilePath, .{ .read = true });
@@ -30,10 +30,11 @@ pub const DiskManager = struct {
         dm.file.close(dm.io);
     }
 
-    pub fn readPage(dm: *DiskManager, pageId: usize, out: []u8) !void {
-        try dm.mu.lock(dm.io);
-        defer dm.mu.unlock(dm.io);
+    pub fn exists(dm: *const DiskManager, pageId: usize) bool {
+        return dm.pages.contains(pageId);
+    }
 
+    pub fn readPage(dm: *DiskManager, pageId: usize, out: []u8) !void {
         if (!dm.pages.contains(pageId)) return Error.PageNotFound;
 
         var reader = dm.file.reader(dm.io, &dm.buf);
@@ -43,9 +44,6 @@ pub const DiskManager = struct {
     }
 
     pub fn writePage(dm: *DiskManager, pageId: usize, data: []const u8) !void {
-        try dm.mu.lock(dm.io);
-        defer dm.mu.unlock(dm.io);
-
         if (!dm.pages.contains(pageId)) {
             try dm.pages.put(pageId, try dm.allocatePage());
         }

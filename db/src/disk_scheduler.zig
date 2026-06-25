@@ -18,8 +18,8 @@ pub const DiskScheduler = struct {
         return self;
     }
 
-    pub fn deinit(self: *DiskScheduler) !void {
-        try self.q.put(null);
+    pub fn deinit(self: *DiskScheduler) void {
+        self.q.put(null) catch {}; // OOM is ignored.
         self.worker.join();
         self.gpa.destroy(self);
     }

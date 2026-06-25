@@ -16,6 +16,7 @@ test DiskScheduler {
     defer testing.allocator.free(testDbPath);
     defer testing.allocator.free(cwd);
     defer dm.deinit();
+    defer ds.deinit();
     defer std.Io.Dir.deleteFile(std.Io.Dir.cwd(), std.testing.io, testDbPath) catch unreachable;
 
     var out: [page.size]u8 = undefined;
@@ -28,5 +29,4 @@ test DiskScheduler {
 
     write.destroy(gpa);
     read.destroy(gpa);
-    try ds.deinit();
 }
