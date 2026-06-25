@@ -21,9 +21,23 @@ pub const BufferPoolManager = struct {
     dm: *DiskManager,
     ds: *DiskScheduler,
 
-    pub fn init(gpa: std.mem.Allocator, io: std.Io, size: usize, diskManager: *DiskManager) !*BufferPoolManager {
+    pub fn init(
+        gpa: std.mem.Allocator,
+        io: std.Io,
+        size: usize,
+        diskManager: *DiskManager,
+    ) !*BufferPoolManager {
         const self: *BufferPoolManager = try gpa.create(BufferPoolManager);
-        self.* = .{ .gpa = gpa, .io = io, .size = size, .frames = try .initCapacity(gpa, size), .pageTable = .init(gpa), .arc = .init(gpa, io, size), .dm = diskManager, .ds = try .init(gpa, io, diskManager) };
+        self.* = .{
+            .gpa = gpa,
+            .io = io,
+            .size = size,
+            .frames = try .initCapacity(gpa, size),
+            .pageTable = .init(gpa),
+            .arc = .init(gpa, io, size),
+            .dm = diskManager,
+            .ds = try .init(gpa, io, diskManager),
+        };
 
         // Init frames
         for (0..size) |i| {
@@ -69,7 +83,6 @@ pub const BufferPoolManager = struct {
 
     fn getPage(self: *BufferPoolManager, pageId: usize) !?*Frame {
         self.mu.lockUncancelable(self.io);
-        defer self.mu.unlock(self.io);
 
         // Select a frame
         var frame: *Frame = undefined;
@@ -85,11 +98,13 @@ pub const BufferPoolManager = struct {
         } else if (try self.arc.evict()) |frameId| {
             // Need to evict
             frame = &self.frames.items[frameId];
+            _ = self.pageTable.remove(frame.pageId.?);
+
             if (frame.isDirty) try frame.flush();
             frame.reset(pageId);
-            _ = self.pageTable.remove(frame.pageId.?);
         } else {
             // All frames are not evictable
+            self.mu.unlock(self.io);
             return null;
         }
 
@@ -101,8 +116,14 @@ pub const BufferPoolManager = struct {
 
         // Page in data if exists on disk.
         if (pagingIn and self.dm.exists(pageId)) {
+            frame.pageLock.lockUncancelable(self.io);
+            defer frame.pageLock.unlock(self.io);
+            self.mu.unlock(self.io);
             const r = try self.ds.scheduleRead(pageId, &frame.data);
+            defer r.destroy(self.gpa);
             r.wait();
+        } else {
+            self.mu.unlock(self.io);
         }
         return frame;
     }
@@ -115,6 +136,16 @@ pub const BufferPoolManager = struct {
         if (frame.pinCount == 0) {
             try self.arc.setEvictable(frame.id, true);
         }
+    }
+
+    pub fn getPinCount(self: *BufferPoolManager, pageId: usize) ?usize {
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
+
+        if (self.pageTable.get(pageId)) |f| {
+            return f.pinCount;
+        }
+        return null;
     }
 };
 
@@ -135,6 +166,7 @@ const Frame = struct {
         self.pageId = pageId;
         self.isDirty = false;
         self.pinCount = 0;
+        @memset(&self.data, 0);
     }
 
     pub fn pin(self: *Frame) void {
