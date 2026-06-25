@@ -6,6 +6,7 @@ const OpCode = @import("./chunk.zig").OpCode;
 const Value = @import("./value.zig").Value;
 const Obj = @import("./value.zig").Obj;
 const Function = @import("./value.zig").Function;
+const Closure = @import("value.zig").Closure;
 const NativeFn = @import("./value.zig").NativeFn;
 const NativeFnError = @import("./value.zig").NativeFnError;
 const ValueTypeTag = @import("./value.zig").ValueTypeTag;
@@ -58,9 +59,12 @@ pub const VM = struct {
         if (functionObj == null) {
             return .INTERPRET_COMPILE_ERROR;
         }
-        self.push(.{ .obj = functionObj.? });
         self.objects = functionObj.?;
-        _ = self.call(&functionObj.?.data.function, 0);
+        self.push(.{ .obj = functionObj.? });
+        const closureObj = Obj.newClosure(self, &functionObj.?.data.function) catch return self.allocError();
+        _ = self.pop();
+        self.push(.{ .obj = closureObj });
+        _ = self.call(&closureObj.data.closure, 0);
 
         return self.run();
     }
@@ -84,7 +88,7 @@ pub const VM = struct {
                     std.debug.print("\n", .{});
                 }
 
-                _ = debug.disassembleInstruction(&frame.function.chunk, frame.ip - frame.function.chunk.code());
+                _ = debug.disassembleInstruction(&frame.closure.function.chunk, frame.ip - frame.closure.function.chunk.code());
             }
 
             const instruction: OpCode = @enumFromInt(frame.readByte());
@@ -219,6 +223,11 @@ pub const VM = struct {
                     }
                     frame = &self.frames[self.frameCount - 1];
                 },
+                .CLOSURE => {
+                    const function = &frame.readConstant().obj.data.function;
+                    const closure = Obj.newClosure(self, function) catch return self.allocError();
+                    self.push(.{ .obj = closure });
+                },
                 .RETURN => {
                     const result = self.pop();
                     self.frameCount -= 1;
@@ -257,7 +266,7 @@ pub const VM = struct {
     fn callValue(self: *VM, callee: Value, argCount: usize) bool {
         switch (callee) {
             .obj => |o| switch (o.data) {
-                .function => |*f| return self.call(f, argCount),
+                .closure => |*c| return self.call(c, argCount),
                 .nativeFn => |nf| {
                     var err: NativeFnError = .{};
                     const result = nf(self, argCount, self.stackTop - argCount, &err);
@@ -277,9 +286,9 @@ pub const VM = struct {
         return false;
     }
 
-    fn call(self: *VM, function: *Function, argCount: usize) bool {
-        if (argCount != function.arity) {
-            self.runtimeError("Expected {} arguments but got {}.", .{ function.arity, argCount });
+    fn call(self: *VM, closure: *Closure, argCount: usize) bool {
+        if (argCount != closure.function.arity) {
+            self.runtimeError("Expected {} arguments but got {}.", .{ closure.function.arity, argCount });
             return false;
         }
 
@@ -290,8 +299,8 @@ pub const VM = struct {
 
         var frame = &self.frames[self.frameCount];
         self.frameCount += 1;
-        frame.function = function;
-        frame.ip = function.chunk.code();
+        frame.closure = closure;
+        frame.ip = closure.function.chunk.code();
         frame.slots = self.stackTop - argCount - 1;
         return true;
     }
@@ -340,7 +349,7 @@ pub const VM = struct {
         var i: usize = self.frameCount - 1;
         while (true) : (i -= 1) {
             const frame = &self.frames[i];
-            const function = frame.function;
+            const function = frame.closure.function;
             const intrusction = frame.ip - function.chunk.code() - 1;
             std.debug.print("[line {}] in ", .{function.chunk.lineOf(intrusction)});
             if (function.name.len == 0) {
@@ -363,7 +372,7 @@ pub const VM = struct {
 const InterpretResult = enum { INTERPRET_OK, INTERPRET_COMPILE_ERROR, INTERPRET_RUNTIME_ERROR };
 
 const CallFrame = struct {
-    function: *Function,
+    closure: *Closure,
     ip: [*]const u8,
     slots: [*]Value,
 
@@ -374,7 +383,7 @@ const CallFrame = struct {
     }
 
     fn readConstant(self: *CallFrame) Value {
-        return self.function.chunk.getConstant(self.readByte());
+        return self.closure.function.chunk.getConstant(self.readByte());
     }
 
     fn readShort(self: *CallFrame) u16 {

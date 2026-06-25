@@ -86,6 +86,7 @@ pub const OpCode = enum {
     JUMP_IF_FALSE,
     LOOP,
     CALL,
+    CLOSURE,
     RETURN,
 };
 

@@ -140,11 +140,13 @@ pub const Compiler = struct {
             return;
         };
         defer funCompiler.deinit(false);
+
         funCompiler.function.name = funCompiler.gpa.alloc(u8, self.parser.previous.lexeme.len) catch {
             self.parser.hadError = true;
             return;
         };
         @memcpy(funCompiler.function.name, self.parser.previous.lexeme);
+
         funCompiler.beginScope();
         funCompiler.consume(.LEFT_PAREN, "Expect '(' after function name.");
         if (!funCompiler.check(.RIGHT_PAREN)) {
@@ -164,9 +166,10 @@ pub const Compiler = struct {
         funCompiler.consume(.RIGHT_PAREN, "Expect ')' after parameters.");
         funCompiler.consume(.LEFT_BRACE, "Expect '{' before function body.");
         funCompiler.block();
+
         const function = funCompiler.end();
         self.vm.addObject(function);
-        self.emitBytes(@intFromEnum(OpCode.CONSTANT), self.makeConstant(.{ .obj = function }) catch {
+        self.emitBytes(@intFromEnum(OpCode.CLOSURE), self.makeConstant(.{ .obj = function }) catch {
             self.parser.hadError = true;
             return;
         });

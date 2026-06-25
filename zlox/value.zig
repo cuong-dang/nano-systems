@@ -52,7 +52,7 @@ pub const Value = union(ValueTypeTag) {
                 .string => |s| std.fmt.bufPrint(buf, "'{s}'", .{s}),
                 .function => |f| std.fmt.bufPrint(buf, "<fn {s}>", .{f.name}),
                 .nativeFn => std.fmt.bufPrint(buf, "<native fn>", .{}),
-                .closure => |c| std.fmt.bufPrint(buf, "<cfn {s}>", .{c.function.name}),
+                .closure => |c| std.fmt.bufPrint(buf, "<fn {s}>", .{c.function.name}),
             },
             .nil => std.fmt.bufPrint(buf, "nil", .{}),
         };
@@ -77,8 +77,7 @@ pub const Obj = struct {
                     vm.gpa.free(f.name);
                 }
             },
-            .nativeFn => {},
-            .closure => {},
+            else => {},
         }
         vm.gpa.destroy(self);
     }
@@ -148,7 +147,7 @@ pub fn printValue(value: Value) void {
             .string => |s| std.debug.print("'{s}'", .{s}),
             .function => |f| if (f.name.len != 0) std.debug.print("<fn {s}>", .{f.name}) else std.debug.print("<script>", .{}),
             .nativeFn => std.debug.print("<native fn>", .{}),
-            .closure => |c| std.debug.print("<cfn {s}>", .{c.function.name}),
+            .closure => |c| if (c.function.name.len != 0) std.debug.print("<fn {s}>", .{c.function.name}) else std.debug.print("<script>", .{}),
         },
         else => |v| std.debug.print("{}", .{v}),
     }
