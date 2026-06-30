@@ -198,7 +198,7 @@ const Frame = struct {
     }
 };
 
-const WritePage = struct {
+pub const WritePage = struct {
     readPage: ReadPage,
 
     pub fn getPageId(self: *const WritePage) usize {
@@ -230,7 +230,7 @@ const WritePage = struct {
     }
 };
 
-const ReadPage = struct {
+pub const ReadPage = struct {
     frame: *Frame,
     released: bool = false,
 
