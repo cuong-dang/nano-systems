@@ -32,11 +32,11 @@ test "write and read a page" {
     @memcpy(writePage.getDataMut()[0..data.len], data);
     try testing.expect(writePage.isDirty());
     try writePage.flush();
-    try writePage.release();
+    try writePage.drop();
 
     var readPage = (try bpm.getReadPage(page0)).?;
     try testing.expectEqualSlices(u8, data, readPage.getData()[0..data.len]);
-    try readPage.release();
+    try readPage.drop();
 }
 
 test "bustub::PagePinEasyTest" {
@@ -59,11 +59,11 @@ test "bustub::PagePinEasyTest" {
 
     {
         var page0_write = (try bpm.getWritePage(pid0)).?;
-        defer page0_write.release() catch unreachable;
+        defer page0_write.drop() catch unreachable;
         @memcpy(page0_write.getDataMut()[0..s0.len], s0);
 
         var page1_write = (try bpm.getWritePage(pid1)).?;
-        defer page1_write.release() catch unreachable;
+        defer page1_write.drop() catch unreachable;
         @memcpy(page1_write.getDataMut()[0..s1.len], s1);
 
         try std.testing.expectEqual(@as(?usize, 1), bpm.getPinCount(pid0));
@@ -75,20 +75,20 @@ test "bustub::PagePinEasyTest" {
         try std.testing.expect((try bpm.getWritePage(temp_pid2)) == null);
 
         try std.testing.expectEqual(@as(?usize, 1), bpm.getPinCount(pid0));
-        page0_write.release() catch unreachable;
+        page0_write.drop() catch unreachable;
         try std.testing.expectEqual(@as(?usize, 0), bpm.getPinCount(pid0));
         try std.testing.expectEqual(@as(?usize, 1), bpm.getPinCount(pid1));
-        page1_write.release() catch unreachable;
+        page1_write.drop() catch unreachable;
         try std.testing.expectEqual(@as(?usize, 0), bpm.getPinCount(pid1));
     }
 
     {
         const temp_pid1 = bpm.newPage();
         var temp_page1 = (try bpm.getReadPage(temp_pid1)).?;
-        defer temp_page1.release() catch unreachable;
+        defer temp_page1.drop() catch unreachable;
         const temp_pid2 = bpm.newPage();
         var temp_page2 = (try bpm.getWritePage(temp_pid2)).?;
-        defer temp_page2.release() catch unreachable;
+        defer temp_page2.drop() catch unreachable;
 
         try std.testing.expectEqual(@as(?usize, null), bpm.getPinCount(pid0));
         try std.testing.expectEqual(@as(?usize, null), bpm.getPinCount(pid1));
@@ -96,7 +96,7 @@ test "bustub::PagePinEasyTest" {
 
     {
         var page0_write = (try bpm.getWritePage(pid0)).?;
-        defer page0_write.release() catch unreachable;
+        defer page0_write.drop() catch unreachable;
 
         try std.testing.expectEqualStrings(s0, std.mem.sliceTo(
             page0_write.getData(),
@@ -105,7 +105,7 @@ test "bustub::PagePinEasyTest" {
         @memcpy(page0_write.getDataMut()[0..s0u.len], s0u);
 
         var page1_write = (try bpm.getWritePage(pid1)).?;
-        defer page1_write.release() catch unreachable;
+        defer page1_write.drop() catch unreachable;
         try std.testing.expectEqualStrings(
             s1,
             std.mem.sliceTo(page1_write.getData(), 0),
@@ -122,14 +122,14 @@ test "bustub::PagePinEasyTest" {
 
     {
         var page0_read = (try bpm.getReadPage(pid0)).?;
-        defer page0_read.release() catch unreachable;
+        defer page0_read.drop() catch unreachable;
         try std.testing.expectEqualStrings(
             s0u,
             std.mem.sliceTo(page0_read.getData(), 0),
         );
 
         var page1_read = (try bpm.getReadPage(pid1)).?;
-        defer page1_read.release() catch unreachable;
+        defer page1_read.drop() catch unreachable;
         try std.testing.expectEqualStrings(
             s1u,
             std.mem.sliceTo(page1_read.getData(), 0),
@@ -158,7 +158,7 @@ test "bustub::PagePinMediumTest" {
     const pid0 = bpm.newPage();
     {
         var page0 = (try bpm.getWritePage(pid0)).?;
-        defer page0.release() catch unreachable;
+        defer page0.drop() catch unreachable;
 
         const hello = "Hello";
         @memcpy(page0.getDataMut()[0..hello.len], hello);
@@ -172,7 +172,7 @@ test "bustub::PagePinMediumTest" {
     var pages: std.ArrayList(WritePage) = .empty;
     defer {
         for (pages.items) |*page| {
-            page.release() catch unreachable;
+            page.drop() catch unreachable;
         }
         pages.deinit(gpa);
     }
@@ -208,7 +208,7 @@ test "bustub::PagePinMediumTest" {
             bpm.getPinCount(pid),
         );
 
-        try page.release();
+        try page.drop();
 
         try std.testing.expectEqual(
             @as(?usize, 0),
@@ -234,7 +234,7 @@ test "bustub::PagePinMediumTest" {
     // Original page should still be readable.
     {
         var original = (try bpm.getReadPage(pid0)).?;
-        defer original.release() catch unreachable;
+        defer original.drop() catch unreachable;
 
         try std.testing.expectEqualStrings(
             "Hello",
@@ -245,7 +245,7 @@ test "bustub::PagePinMediumTest" {
     // Fill the last frame.
     const last_pid = bpm.newPage();
     var last_page = (try bpm.getReadPage(last_pid)).?;
-    defer last_page.release() catch unreachable;
+    defer last_page.drop() catch unreachable;
 
     try std.testing.expect((try bpm.getReadPage(pid0)) == null);
 }
@@ -275,7 +275,7 @@ test "bustub::PageAccessTest" {
                 try std.Io.sleep(io, .fromMilliseconds(5), .awake);
 
                 var guard = (try _bpm.getWritePage(_pid)).?;
-                defer guard.release() catch unreachable;
+                defer guard.drop() catch unreachable;
 
                 const s = try std.fmt.bufPrint(&tmp, "{d}", .{i});
                 @memcpy(guard.getDataMut()[0..s.len], s);
@@ -289,7 +289,7 @@ test "bustub::PageAccessTest" {
         try std.Io.sleep(io, .fromMilliseconds(10), .awake);
 
         var guard = (try bpm.getReadPage(pid)).?;
-        defer guard.release() catch unreachable;
+        defer guard.drop() catch unreachable;
 
         @memcpy(&buf, guard.getData());
 
@@ -325,7 +325,7 @@ test "bustub::ContentionTest" {
 
             for (0..rounds) |i| {
                 var guard = (try _bpm.getWritePage(_pid)).?;
-                defer guard.release() catch unreachable;
+                defer guard.drop() catch unreachable;
 
                 const s = try std.fmt.bufPrint(&tmp, "{d}", .{i});
                 const data = guard.getDataMut();
@@ -374,7 +374,7 @@ test "bustub::DeadlockTest" {
             _start.store(true, .release);
 
             var child_guard = (try _bpm.getWritePage(_pid0)).?;
-            defer child_guard.release() catch unreachable;
+            defer child_guard.drop() catch unreachable;
         }
     }.run, .{ bpm, pid0, &start });
 
@@ -387,9 +387,9 @@ test "bustub::DeadlockTest" {
     try std.Io.sleep(io, .fromSeconds(1), .awake);
 
     var guard1 = (try bpm.getWritePage(pid1)).?;
-    defer guard1.release() catch unreachable;
+    defer guard1.drop() catch unreachable;
 
-    guard0.release() catch unreachable;
+    guard0.drop() catch unreachable;
 }
 
 test "bustub::EvictableTest" {
@@ -445,7 +445,7 @@ test "bustub::EvictableTest" {
                     defer _mutex.lockUncancelable(_io);
 
                     var read_guard = (try _bpm.getReadPage(_winner_pid)).?;
-                    defer read_guard.release() catch unreachable;
+                    defer read_guard.drop() catch unreachable;
 
                     try std.testing.expect(
                         (try _bpm.getReadPage(_loser_pid)) == null,
@@ -474,7 +474,7 @@ test "bustub::EvictableTest" {
 
             mutex.unlock(io);
 
-            read_guard.release() catch unreachable;
+            read_guard.drop() catch unreachable;
         } else {
             var write_guard = (try bpm.getWritePage(winner_pid)).?;
 
@@ -483,7 +483,7 @@ test "bustub::EvictableTest" {
 
             mutex.unlock(io);
 
-            write_guard.release() catch unreachable;
+            write_guard.drop() catch unreachable;
         }
     }
 }

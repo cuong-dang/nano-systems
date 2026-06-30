@@ -128,7 +128,7 @@ pub const BufferPoolManager = struct {
         return frame;
     }
 
-    fn release(self: *BufferPoolManager, frame: *Frame) !void {
+    fn drop(self: *BufferPoolManager, frame: *Frame) !void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
@@ -193,8 +193,8 @@ const Frame = struct {
         self.isDirty = false;
     }
 
-    pub fn release(self: *Frame) !void {
-        try self.bpm.release(self);
+    pub fn drop(self: *Frame) !void {
+        try self.bpm.drop(self);
     }
 };
 
@@ -222,17 +222,17 @@ pub const WritePage = struct {
         try self.readPage.flush();
     }
 
-    pub fn release(self: *WritePage) !void {
-        if (self.readPage.released) return;
-        try self.readPage.frame.release();
-        self.readPage.released = true;
+    pub fn drop(self: *WritePage) !void {
+        if (self.readPage.dropped) return;
+        try self.readPage.frame.drop();
+        self.readPage.dropped = true;
         self.readPage.frame.pageLock.unlock(self.readPage.frame.bpm.io);
     }
 };
 
 pub const ReadPage = struct {
     frame: *Frame,
-    released: bool = false,
+    dropped: bool = false,
 
     pub fn getPageId(self: *const ReadPage) usize {
         return self.frame.pageId.?;
@@ -250,10 +250,10 @@ pub const ReadPage = struct {
         try self.frame.flush();
     }
 
-    pub fn release(self: *ReadPage) !void {
-        if (self.released) return;
-        try self.frame.release();
-        self.released = true;
+    pub fn drop(self: *ReadPage) !void {
+        if (self.dropped) return;
+        try self.frame.drop();
+        self.dropped = true;
         self.frame.pageLock.unlockShared(self.frame.bpm.io);
     }
 };
