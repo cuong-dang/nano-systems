@@ -17,6 +17,7 @@ pub const Compiler = struct {
 
     locals: [std.math.maxInt(u8) + 1]Local = undefined,
     localCount: u8 = 0,
+    upvalues: [std.math.maxInt(u8)]Upvalue = undefined,
     scopeDepth: usize = 0,
 
     scanner: *Scanner = undefined,
@@ -28,9 +29,18 @@ pub const Compiler = struct {
     function: *Function = undefined,
     functionType: FunctionType,
 
-    pub fn init(gpa: std.mem.Allocator, vm: *VM, funType: FunctionType, scanner: ?*Scanner, parser: ?*Parser) !*Compiler {
+    enclosing: ?*Compiler,
+
+    pub fn init(gpa: std.mem.Allocator, vm: *VM, funType: FunctionType, scanner: ?*Scanner, parser: ?*Parser, enclosing: ?*Compiler) !*Compiler {
         const compiler = try gpa.create(Compiler);
-        compiler.* = Compiler{ .gpa = gpa, .stringConstants = .init(gpa), .vm = vm, .functionObj = try Obj.newFunction(vm), .functionType = funType };
+        compiler.* = Compiler{
+            .gpa = gpa,
+            .stringConstants = .init(gpa),
+            .vm = vm,
+            .functionObj = try Obj.newFunction(vm),
+            .functionType = funType,
+            .enclosing = enclosing,
+        };
         compiler.function = &compiler.functionObj.data.function;
 
         if (scanner) |s| {
@@ -135,7 +145,7 @@ pub const Compiler = struct {
     }
 
     fn fun(self: *Compiler, funType: FunctionType) void {
-        var funCompiler = Compiler.init(self.gpa, self.vm, funType, self.scanner, self.parser) catch {
+        var funCompiler = Compiler.init(self.gpa, self.vm, funType, self.scanner, self.parser, self) catch {
             self.parser.hadError = true;
             return;
         };
@@ -173,6 +183,12 @@ pub const Compiler = struct {
             self.parser.hadError = true;
             return;
         });
+
+        // Upvalues
+        for (0..function.data.function.upvalueCount) |i| {
+            self.emitByte(if (funCompiler.upvalues[i].isLocal) 1 else 0);
+            self.emitByte(funCompiler.upvalues[i].index);
+        }
     }
 
     fn call(self: *Compiler, canAssign: bool) void {
@@ -481,10 +497,15 @@ pub const Compiler = struct {
     fn namedVariable(self: *Compiler, name: []const u8, canAssign: bool) void {
         var getOp: OpCode = undefined;
         var setOp: OpCode = undefined;
-        var arg = self.resolveLocal(name);
-        if (arg != null) {
+        var arg: ?u8 = null;
+        if (self.resolveLocal(name)) |a| {
+            arg = a;
             getOp = .GET_LOCAL;
             setOp = .SET_LOCAL;
+        } else if (self.resolveUpvalue(name)) |a| {
+            arg = a;
+            getOp = .GET_UPVALUE;
+            setOp = .SET_UPVALUE;
         } else {
             arg = self.identifierConstant(name) catch {
                 self.parser.hadError = true;
@@ -515,6 +536,39 @@ pub const Compiler = struct {
             if (i == 0) break;
         }
         return null;
+    }
+
+    fn resolveUpvalue(self: *Compiler, name: []const u8) ?u8 {
+        if (self.enclosing == null) return null;
+
+        if (self.enclosing.?.resolveLocal(name)) |lc| {
+            return self.addUpvalue(lc, true);
+        }
+
+        if (self.enclosing.?.resolveUpvalue(name)) |uv| {
+            return self.addUpvalue(uv, false);
+        }
+
+        return null;
+    }
+
+    fn addUpvalue(self: *Compiler, index: u8, isLocal: bool) u8 {
+        const upvalueCount = self.function.upvalueCount;
+
+        for (0..upvalueCount) |i| {
+            const uv = self.upvalues[i];
+            if (uv.index == index and uv.isLocal == isLocal) return @intCast(i);
+        }
+
+        if (upvalueCount == std.math.maxInt(u8)) {
+            self.error_("Too many closure variables in function.");
+            return 0;
+        }
+
+        self.upvalues[upvalueCount].isLocal = isLocal;
+        self.upvalues[upvalueCount].index = index;
+        self.function.upvalueCount += 1;
+        return upvalueCount;
     }
 
     fn parseVariable(self: *Compiler, errorMessage: []const u8) !u8 {
@@ -722,6 +776,11 @@ const Precedence = enum {
 const Local = struct {
     name: []const u8,
     depth: ?usize,
+};
+
+const Upvalue = struct {
+    index: u8,
+    isLocal: bool,
 };
 
 const ParseFn = *const fn (*Compiler, bool) void;

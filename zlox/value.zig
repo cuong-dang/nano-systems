@@ -38,7 +38,7 @@ pub const Value = union(ValueTypeTag) {
                     .string => return std.mem.eql(u8, self.obj.data.string, b.obj.data.string),
                     .function => return std.mem.eql(u8, self.obj.data.function.name, b.obj.data.function.name),
                     .nativeFn => |nf| return nf == b.obj.data.nativeFn,
-                    .closure => unreachable,
+                    else => unreachable,
                 }
             },
         };
@@ -53,15 +53,22 @@ pub const Value = union(ValueTypeTag) {
                 .function => |f| std.fmt.bufPrint(buf, "<fn {s}>", .{f.name}),
                 .nativeFn => std.fmt.bufPrint(buf, "<native fn>", .{}),
                 .closure => |c| std.fmt.bufPrint(buf, "<fn {s}>", .{c.function.name}),
+                .upvalue => std.fmt.bufPrint(buf, "upvalue", .{}),
             },
             .nil => std.fmt.bufPrint(buf, "nil", .{}),
         };
     }
 };
 
-pub const ObjTypeTag = enum { string, function, nativeFn, closure };
+pub const ObjTypeTag = enum { string, function, nativeFn, closure, upvalue };
 
-const ObjData = union(ObjTypeTag) { string: []u8, function: Function, nativeFn: NativeFn, closure: Closure };
+const ObjData = union(ObjTypeTag) {
+    string: []u8,
+    function: Function,
+    nativeFn: NativeFn,
+    closure: Closure,
+    upvalue: Upvalue,
+};
 
 // Objects are owned by VM.
 pub const Obj = struct {
@@ -77,6 +84,7 @@ pub const Obj = struct {
                     vm.gpa.free(f.name);
                 }
             },
+            .closure => |c| vm.gpa.free(c.upvalues),
             else => {},
         }
         vm.gpa.destroy(self);
@@ -105,7 +113,7 @@ pub const Obj = struct {
     pub fn newFunction(vm: *VM) !*Obj {
         const obj = try vm.gpa.create(Obj);
         vm.addObject(obj);
-        obj.* = .{ .data = .{ .function = .{ .arity = 0, .name = "", .chunk = .init(vm.gpa) } }, .next = null };
+        obj.* = .{ .data = .{ .function = .{ .arity = 0, .upvalueCount = 0, .name = "", .chunk = .init(vm.gpa) } }, .next = null };
         return obj;
     }
 
@@ -119,13 +127,24 @@ pub const Obj = struct {
     pub fn newClosure(vm: *VM, function: *Function) !*Obj {
         const obj = try vm.gpa.create(Obj);
         vm.addObject(obj);
-        obj.* = .{ .data = .{ .closure = .{ .function = function } } };
+        obj.* = .{ .data = .{ .closure = .{ .function = function, .upvalues = try vm.gpa.alloc(?*Upvalue, function.upvalueCount) } } };
+        for (obj.data.closure.upvalues) |*uv| {
+            uv.* = null;
+        }
+        return obj;
+    }
+
+    pub fn newUpvalue(vm: *VM, slot: *Value) !*Obj {
+        const obj = try vm.gpa.create(Obj);
+        vm.addObject(obj);
+        obj.* = .{ .data = .{ .upvalue = .{ .location = slot } } };
         return obj;
     }
 };
 
 pub const Function = struct {
     arity: usize,
+    upvalueCount: u8,
     chunk: Chunk,
     name: []u8,
 };
@@ -139,6 +158,11 @@ pub const NativeFnError = struct {
 
 pub const Closure = struct {
     function: *Function,
+    upvalues: []?*Upvalue,
+};
+
+pub const Upvalue = struct {
+    location: *Value,
 };
 
 pub fn printValue(value: Value) void {
@@ -148,6 +172,7 @@ pub fn printValue(value: Value) void {
             .function => |f| if (f.name.len != 0) std.debug.print("<fn {s}>", .{f.name}) else std.debug.print("<script>", .{}),
             .nativeFn => std.debug.print("<native fn>", .{}),
             .closure => |c| if (c.function.name.len != 0) std.debug.print("<fn {s}>", .{c.function.name}) else std.debug.print("<script>", .{}),
+            .upvalue => std.debug.print("upvalue", .{}),
         },
         else => |v| std.debug.print("{}", .{v}),
     }

@@ -7,6 +7,7 @@ const Value = @import("./value.zig").Value;
 const Obj = @import("./value.zig").Obj;
 const Function = @import("./value.zig").Function;
 const Closure = @import("value.zig").Closure;
+const Upvalue = @import("value.zig").Upvalue;
 const NativeFn = @import("./value.zig").NativeFn;
 const NativeFnError = @import("./value.zig").NativeFnError;
 const ValueTypeTag = @import("./value.zig").ValueTypeTag;
@@ -49,7 +50,7 @@ pub const VM = struct {
 
     pub fn interpret(self: *VM, source: []const u8) InterpretResult {
         self.resetStack();
-        const compiler = Compiler.init(self.gpa, self, .SCRIPT, null, null) catch {
+        const compiler = Compiler.init(self.gpa, self, .SCRIPT, null, null, null) catch {
             return .INTERPRET_COMPILE_ERROR;
         };
         defer compiler.deinit(true);
@@ -107,6 +108,14 @@ pub const VM = struct {
                 .SET_LOCAL => {
                     const slot = frame.readByte();
                     frame.slots[slot] = self.peek(0);
+                },
+                .GET_UPVALUE => {
+                    const slot = frame.readByte();
+                    self.push(frame.closure.upvalues.ptr[slot].?.location.*);
+                },
+                .SET_UPVALUE => {
+                    const slot = frame.readByte();
+                    frame.closure.upvalues.ptr[slot].?.* = self.peek(0).obj.data.upvalue;
                 },
                 .GET_GLOBAL => {
                     const name = frame.readConstant().obj.data.string;
@@ -227,6 +236,16 @@ pub const VM = struct {
                     const function = &frame.readConstant().obj.data.function;
                     const closure = Obj.newClosure(self, function) catch return self.allocError();
                     self.push(.{ .obj = closure });
+
+                    for (0..closure.data.closure.upvalues.len) |i| {
+                        const isLocal = frame.readByte();
+                        const index = frame.readByte();
+                        if (isLocal == 1) {
+                            closure.data.closure.upvalues.ptr[i] = self.captureUpvalue(frame.slots + index) catch return self.allocError();
+                        } else {
+                            closure.data.closure.upvalues.ptr[i] = frame.closure.upvalues.ptr[index];
+                        }
+                    }
                 },
                 .RETURN => {
                     const result = self.pop();
@@ -303,6 +322,11 @@ pub const VM = struct {
         frame.ip = closure.function.chunk.code();
         frame.slots = self.stackTop - argCount - 1;
         return true;
+    }
+
+    fn captureUpvalue(self: *VM, local: [*]Value) !*Upvalue {
+        const new = try Obj.newUpvalue(self, &local[0]);
+        return &new.data.upvalue;
     }
 
     fn defineNative(self: *VM, name: []const u8, nativeFn: NativeFn) !void {

@@ -26,6 +26,8 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
         .CONSTANT => return constantInstruction(.CONSTANT, chunk, offset),
         .GET_LOCAL => return byteInstruction(.GET_LOCAL, chunk, offset),
         .SET_LOCAL => return byteInstruction(.SET_LOCAL, chunk, offset),
+        .GET_UPVALUE => return byteInstruction(.GET_UPVALUE, chunk, offset),
+        .SET_UPVALUE => return byteInstruction(.SET_UPVALUE, chunk, offset),
         .GET_GLOBAL => return constantInstruction(.GET_GLOBAL, chunk, offset),
         .SET_GLOBAL => return constantInstruction(.SET_GLOBAL, chunk, offset),
         .DEFINE_GLOBAL => return constantInstruction(.DEFINE_GLOBAL, chunk, offset),
@@ -40,6 +42,19 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
             print("{s:<16} {d:>4} ", .{ @tagName(op), constant });
             printValue(chunk.getConstant(constant));
             print("\n", .{});
+
+            const function = chunk.getConstant(constant).obj.data.function;
+            for (0..function.upvalueCount) |_| {
+                const isLocal = chunk.get(nextOffset);
+                nextOffset += 1;
+                const index = chunk.get(nextOffset);
+                nextOffset += 1;
+                print(
+                    "{d:0>4}      |                     {s} {d}\n",
+                    .{ nextOffset - 2, if (isLocal == 1) "local" else "upvalue", index },
+                );
+            }
+
             return nextOffset;
         },
         else => |v| return simpleInstruction(v, offset),
