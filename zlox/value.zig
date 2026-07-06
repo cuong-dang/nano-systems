@@ -137,7 +137,11 @@ pub const Obj = struct {
     pub fn newUpvalue(vm: *VM, slot: *Value) !*Obj {
         const obj = try vm.gpa.create(Obj);
         vm.addObject(obj);
-        obj.* = .{ .data = .{ .upvalue = .{ .location = slot } } };
+        obj.* = .{ .data = .{ .upvalue = .{
+            .location = slot,
+            .closed = .{ .nil = void{} },
+            .next = null,
+        } } };
         return obj;
     }
 };
@@ -163,6 +167,8 @@ pub const Closure = struct {
 
 pub const Upvalue = struct {
     location: *Value,
+    closed: Value,
+    next: ?*Upvalue,
 };
 
 pub fn printValue(value: Value) void {

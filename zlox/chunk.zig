@@ -89,6 +89,7 @@ pub const OpCode = enum {
     LOOP,
     CALL,
     CLOSURE,
+    CLOSE_UPVALUE,
     RETURN,
 };
 

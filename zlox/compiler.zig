@@ -57,6 +57,7 @@ pub const Compiler = struct {
 
         const local = &compiler.locals[compiler.localCount];
         local.depth = 0;
+        local.isCaptured = false;
         local.name = "";
         compiler.localCount += 1;
         return compiler;
@@ -357,7 +358,11 @@ pub const Compiler = struct {
         self.scopeDepth -= 1;
 
         while (self.localCount > 0 and self.locals[self.localCount - 1].depth != null and self.locals[self.localCount - 1].depth.? > self.scopeDepth) : (self.localCount -= 1) {
-            self.emitOp(.POP);
+            if (self.locals[self.localCount - 1].isCaptured) {
+                self.emitOp(.CLOSE_UPVALUE);
+            } else {
+                self.emitOp(.POP);
+            }
         }
     }
 
@@ -542,6 +547,7 @@ pub const Compiler = struct {
         if (self.enclosing == null) return null;
 
         if (self.enclosing.?.resolveLocal(name)) |lc| {
+            self.enclosing.?.locals[lc].isCaptured = true;
             return self.addUpvalue(lc, true);
         }
 
@@ -610,6 +616,7 @@ pub const Compiler = struct {
         const local = &self.locals[self.localCount];
         local.name = name;
         local.depth = null;
+        local.isCaptured = false;
         self.localCount += 1;
     }
 
@@ -776,6 +783,7 @@ const Precedence = enum {
 const Local = struct {
     name: []const u8,
     depth: ?usize,
+    isCaptured: bool,
 };
 
 const Upvalue = struct {

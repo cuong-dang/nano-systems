@@ -24,6 +24,7 @@ pub const VM = struct {
     frameCount: usize = 0,
     stack: [STACK_MAX]Value = undefined,
     stackTop: [*]Value = undefined,
+    openUpvalues: ?*Upvalue = null,
     objects: ?*Obj = null,
     globals: std.StringHashMap(Value),
     gpa: std.mem.Allocator,
@@ -115,7 +116,7 @@ pub const VM = struct {
                 },
                 .SET_UPVALUE => {
                     const slot = frame.readByte();
-                    frame.closure.upvalues.ptr[slot].?.* = self.peek(0).obj.data.upvalue;
+                    frame.closure.upvalues.ptr[slot].?.*.location.* = self.peek(0);
                 },
                 .GET_GLOBAL => {
                     const name = frame.readConstant().obj.data.string;
@@ -247,8 +248,13 @@ pub const VM = struct {
                         }
                     }
                 },
+                .CLOSE_UPVALUE => {
+                    self.closeUpvalues(&(self.stackTop - 1)[0]);
+                    _ = self.pop();
+                },
                 .RETURN => {
                     const result = self.pop();
+                    self.closeUpvalues(&frame.slots[0]);
                     self.frameCount -= 1;
                     if (self.frameCount == 0) {
                         _ = self.pop();
@@ -325,8 +331,34 @@ pub const VM = struct {
     }
 
     fn captureUpvalue(self: *VM, local: [*]Value) !*Upvalue {
+        var prevUpvalue: ?*Upvalue = null;
+        var upvalue: ?*Upvalue = self.openUpvalues;
+        while (upvalue != null and @intFromPtr(upvalue.?.location) > @intFromPtr(&local[0])) {
+            prevUpvalue = upvalue;
+            upvalue = upvalue.?.next;
+        }
+
+        if (upvalue != null and upvalue.?.location == &local[0]) {
+            return upvalue.?;
+        }
+
         const new = try Obj.newUpvalue(self, &local[0]);
+        new.data.upvalue.next = upvalue;
+        if (prevUpvalue == null) {
+            self.openUpvalues = &new.data.upvalue;
+        } else {
+            prevUpvalue.?.next = &new.data.upvalue;
+        }
         return &new.data.upvalue;
+    }
+
+    fn closeUpvalues(self: *VM, last: *Value) void {
+        while (self.openUpvalues != null and @intFromPtr(self.openUpvalues.?.location) >= @intFromPtr(last)) {
+            const upvalue = self.openUpvalues;
+            upvalue.?.closed = upvalue.?.location.*;
+            upvalue.?.location = &upvalue.?.closed;
+            self.openUpvalues = upvalue.?.next;
+        }
     }
 
     fn defineNative(self: *VM, name: []const u8, nativeFn: NativeFn) !void {
