@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const PageId = @import("page.zig").PageId;
 const Channel = @import("./channel.zig").Channel;
 const DiskManager = @import("./disk_manager.zig").DiskManager;
 
@@ -24,13 +25,13 @@ pub const DiskScheduler = struct {
         self.gpa.destroy(self);
     }
 
-    pub fn scheduleRead(self: *DiskScheduler, pageId: usize, out: []u8) !*DiskRequest {
+    pub fn scheduleRead(self: *DiskScheduler, pageId: PageId, out: []u8) !*DiskRequest {
         const request = try DiskRequest.createReadRequest(self.gpa, self.io, pageId, out);
         try self.schedule(&.{request});
         return request;
     }
 
-    pub fn scheduleWrite(self: *DiskScheduler, pageId: usize, in: []const u8) !*DiskRequest {
+    pub fn scheduleWrite(self: *DiskScheduler, pageId: PageId, in: []const u8) !*DiskRequest {
         const request = try DiskRequest.createWriteRequest(self.gpa, self.io, pageId, in);
         try self.schedule(&.{request});
         return request;
@@ -69,19 +70,19 @@ pub const DiskRequest = struct {
     cond: std.Io.Condition = .init,
 
     isWrite: bool,
-    pageId: usize,
+    pageId: PageId,
     in: []const u8 = undefined,
     out: []u8 = undefined,
     ok: ?bool = null,
     err: ?anyerror = null,
 
-    pub fn createReadRequest(gpa: std.mem.Allocator, io: std.Io, pageId: usize, out: []u8) !*DiskRequest {
+    pub fn createReadRequest(gpa: std.mem.Allocator, io: std.Io, pageId: PageId, out: []u8) !*DiskRequest {
         const r = try gpa.create(DiskRequest);
         r.* = .{ .io = io, .isWrite = false, .pageId = pageId, .out = out };
         return r;
     }
 
-    pub fn createWriteRequest(gpa: std.mem.Allocator, io: std.Io, pageId: usize, in: []const u8) !*DiskRequest {
+    pub fn createWriteRequest(gpa: std.mem.Allocator, io: std.Io, pageId: PageId, in: []const u8) !*DiskRequest {
         const r = try gpa.create(DiskRequest);
         r.* = .{ .io = io, .isWrite = true, .pageId = pageId, .in = in };
         return r;

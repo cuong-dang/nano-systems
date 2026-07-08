@@ -4,6 +4,7 @@ const gpa = testing.allocator;
 const io = testing.io;
 
 const pageSize = @import("page.zig").size;
+const PageId = @import("page.zig").PageId;
 const DiskManager = @import("./disk_manager.zig").DiskManager;
 const BufferPoolManager = @import("buffer_pool_manager.zig").BufferPoolManager;
 const WritePage = @import("buffer_pool_manager.zig").WritePage;
@@ -268,7 +269,7 @@ test "bustub::PageAccessTest" {
     var buf: [pageSize]u8 = undefined;
 
     const writer = try std.Thread.spawn(.{}, struct {
-        fn run(_bpm: *BufferPoolManager, _pid: usize) !void {
+        fn run(_bpm: *BufferPoolManager, _pid: PageId) !void {
             var tmp: [32]u8 = undefined;
 
             for (0..rounds) |i| {
@@ -320,7 +321,7 @@ test "bustub::ContentionTest" {
     const pid = bpm.newPage();
 
     const Writer = struct {
-        fn run(_bpm: *BufferPoolManager, _pid: usize) !void {
+        fn run(_bpm: *BufferPoolManager, _pid: PageId) !void {
             var tmp: [32]u8 = undefined;
 
             for (0..rounds) |i| {
@@ -368,7 +369,7 @@ test "bustub::DeadlockTest" {
     const child = try std.Thread.spawn(.{}, struct {
         fn run(
             _bpm: *BufferPoolManager,
-            _pid0: usize,
+            _pid0: PageId,
             _start: *std.atomic.Value(bool),
         ) !void {
             _start.store(true, .release);
@@ -431,8 +432,8 @@ test "bustub::EvictableTest" {
                     _mutex: *std.Io.Mutex,
                     _cv: *std.Io.Condition,
                     _signal: *bool,
-                    _winner_pid: usize,
-                    _loser_pid: usize,
+                    _winner_pid: PageId,
+                    _loser_pid: PageId,
                 ) !void {
                     _mutex.lockUncancelable(_io);
                     defer _mutex.unlock(_io);

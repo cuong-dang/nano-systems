@@ -36,7 +36,7 @@ test "grows" {
     defer std.Io.Dir.deleteFile(std.Io.Dir.cwd(), std.testing.io, testDbPath) catch unreachable;
 
     for (100..117) |i| {
-        try dm.writePage(i, &.{});
+        try dm.writePage(@intCast(i), &.{});
     }
     try std.testing.expectEqual(dm.pageCapacity, 32);
 }

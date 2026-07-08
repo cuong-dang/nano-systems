@@ -1,12 +1,13 @@
 const std = @import("std");
 const page = @import("./page.zig");
+const PageId = @import("page.zig").PageId;
 
 pub const DiskManager = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
 
     file: std.Io.File,
-    pages: std.AutoHashMap(usize, usize), // page id -> offset
+    pages: std.AutoHashMap(PageId, usize), // page id -> offset
     pageCapacity: usize = initPageCapacity,
     freeSlots: std.ArrayList(usize) = .empty,
     buf: [page.size]u8 = undefined,
@@ -30,11 +31,11 @@ pub const DiskManager = struct {
         dm.file.close(dm.io);
     }
 
-    pub fn exists(dm: *const DiskManager, pageId: usize) bool {
+    pub fn exists(dm: *const DiskManager, pageId: PageId) bool {
         return dm.pages.contains(pageId);
     }
 
-    pub fn readPage(dm: *DiskManager, pageId: usize, out: []u8) !void {
+    pub fn readPage(dm: *DiskManager, pageId: PageId, out: []u8) !void {
         if (!dm.pages.contains(pageId)) return Error.PageNotFound;
 
         var reader = dm.file.reader(dm.io, &dm.buf);
@@ -43,7 +44,7 @@ pub const DiskManager = struct {
         try reader.interface.readSliceAll(out);
     }
 
-    pub fn writePage(dm: *DiskManager, pageId: usize, data: []const u8) !void {
+    pub fn writePage(dm: *DiskManager, pageId: PageId, data: []const u8) !void {
         if (!dm.pages.contains(pageId)) {
             try dm.pages.put(pageId, try dm.allocatePage());
         }

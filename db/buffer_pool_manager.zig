@@ -5,6 +5,7 @@ const ArcReplacer = @import("arc_replacer.zig").ArcReplacer;
 const DiskScheduler = @import("disk_scheduler.zig").DiskScheduler;
 const DiskRequest = @import("disk_scheduler.zig").DiskRequest;
 const page = @import("page.zig");
+const PageId = @import("page.zig").PageId;
 
 pub const BufferPoolManager = struct {
     gpa: std.mem.Allocator,
@@ -12,10 +13,10 @@ pub const BufferPoolManager = struct {
     mu: std.Io.Mutex = .init,
 
     size: usize,
-    nextPageId: usize = 0, // db is treated as brand new
+    nextPageId: PageId = 0, // db is treated as brand new
     frames: std.ArrayList(Frame),
     freeFrames: std.DoublyLinkedList = .{},
-    pageTable: std.AutoHashMap(usize, *Frame), // page id -> frame
+    pageTable: std.AutoHashMap(PageId, *Frame), // page id -> frame
 
     arc: ArcReplacer,
     dm: *DiskManager,
@@ -56,7 +57,7 @@ pub const BufferPoolManager = struct {
         self.gpa.destroy(self);
     }
 
-    pub fn newPage(self: *BufferPoolManager) usize {
+    pub fn newPage(self: *BufferPoolManager) PageId {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
@@ -65,7 +66,7 @@ pub const BufferPoolManager = struct {
         return newPageId;
     }
 
-    pub fn getReadPage(self: *BufferPoolManager, pageId: usize) !?ReadPage {
+    pub fn getReadPage(self: *BufferPoolManager, pageId: PageId) !?ReadPage {
         if (try self.getPage(pageId)) |frame| {
             frame.pageLock.lockSharedUncancelable(self.io);
             return .{ .frame = frame };
@@ -73,7 +74,7 @@ pub const BufferPoolManager = struct {
         return null;
     }
 
-    pub fn getWritePage(self: *BufferPoolManager, pageId: usize) !?WritePage {
+    pub fn getWritePage(self: *BufferPoolManager, pageId: PageId) !?WritePage {
         if (try self.getPage(pageId)) |frame| {
             frame.pageLock.lockUncancelable(self.io);
             return .{ .readPage = .{ .frame = frame } };
@@ -81,7 +82,7 @@ pub const BufferPoolManager = struct {
         return null;
     }
 
-    fn getPage(self: *BufferPoolManager, pageId: usize) !?*Frame {
+    fn getPage(self: *BufferPoolManager, pageId: PageId) !?*Frame {
         self.mu.lockUncancelable(self.io);
 
         // Select a frame
@@ -138,7 +139,7 @@ pub const BufferPoolManager = struct {
         }
     }
 
-    pub fn getPinCount(self: *BufferPoolManager, pageId: usize) ?usize {
+    pub fn getPinCount(self: *BufferPoolManager, pageId: PageId) ?usize {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
@@ -154,7 +155,7 @@ const Frame = struct {
     pageLock: std.Io.RwLock = .init,
 
     id: usize,
-    pageId: ?usize = null,
+    pageId: ?PageId = null,
     data: [page.size]u8 = undefined,
     isDirty: bool = false,
     pinCount: usize = 0,
@@ -162,7 +163,7 @@ const Frame = struct {
     bpm: *BufferPoolManager,
     node: Node = .{},
 
-    pub fn reset(self: *Frame, pageId: usize) void {
+    pub fn reset(self: *Frame, pageId: PageId) void {
         self.pageId = pageId;
         self.isDirty = false;
         self.pinCount = 0;
@@ -201,7 +202,7 @@ const Frame = struct {
 pub const WritePage = struct {
     readPage: ReadPage,
 
-    pub fn getPageId(self: *const WritePage) usize {
+    pub fn getPageId(self: *const WritePage) PageId {
         return self.readPage.getPageId();
     }
 
@@ -234,7 +235,7 @@ pub const ReadPage = struct {
     frame: *Frame,
     dropped: bool = false,
 
-    pub fn getPageId(self: *const ReadPage) usize {
+    pub fn getPageId(self: *const ReadPage) PageId {
         return self.frame.pageId.?;
     }
 
