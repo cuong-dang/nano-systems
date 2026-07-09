@@ -156,7 +156,7 @@ const Frame = struct {
 
     id: usize,
     pageId: ?PageId = null,
-    data: [page.size]u8 = undefined,
+    data: [page.size]u8 align(@alignOf(std.c.max_align_t)) = undefined,
     isDirty: bool = false,
     pinCount: usize = 0,
 
