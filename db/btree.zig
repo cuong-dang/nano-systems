@@ -16,7 +16,7 @@ pub fn Btree(
 ) type {
     const InternalPage = InternalPage_(Key, internalMaxSize);
     _ = InternalPage;
-    const LeafPage = LeafPage_(Key, leafMaxSize, numTombs);
+    const LeafPage = LeafPage_(Key, cmp, leafMaxSize, numTombs);
 
     return struct {
         const Self = @This();
@@ -39,37 +39,30 @@ pub fn Btree(
         }
 
         pub fn insert(self: *Self, key: Key, rid: Rid) !void {
-            var L: *LeafPage = undefined;
+            var leaf: *LeafPage = undefined;
             var page: WritePage = undefined;
 
             if (self.rootPageId == null) {
-                // New leaf page
+                // Tree is empty. Create a new leaf page.
                 self.rootPageId = self.bpm.newPage();
                 if (try self.bpm.getWritePage(self.rootPageId.?)) |p| {
                     page = p;
-                    L = @ptrCast(@alignCast(page.getDataMut().ptr));
-                    L.* = .{};
+                    leaf = @ptrCast(@alignCast(page.getDataMut().ptr));
+                    leaf.* = .{}; // reset
                 } else {
                     return;
                 }
+            } else {
+                // Find the leaf node that should contain key K.
             }
 
-            if (!L.isFull()) {
-                Self.insertInLeaf(L, key, rid);
+            if (!leaf.isFull()) {
+                leaf.insert(leaf, key, rid);
+            } else {
+                // Split the leaf.
             }
 
             try page.drop();
-        }
-
-        fn insertInLeaf(L: *LeafPage, key: Key, rid: Rid) void {
-            if (L.isEmpty() or Self.keyLt(key, L.keys[0].?)) {
-                L.insertAt(0, key, rid);
-                return;
-            }
-        }
-
-        fn keyLt(k1: Key, k2: Key) bool {
-            return cmp(k1, k2) < 0;
         }
     };
 }
