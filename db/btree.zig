@@ -2,6 +2,7 @@ const std = @import("std");
 
 const PageId = @import("page.zig").PageId;
 const WritePage = @import("buffer_pool_manager.zig").WritePage;
+const BasePage_ = @import("btree_page.zig").BasePage;
 const InternalPage_ = @import("btree_page.zig").InternalPage;
 const LeafPage_ = @import("btree_page.zig").LeafPage;
 const BufferPoolManager = @import("buffer_pool_manager.zig").BufferPoolManager;
@@ -10,13 +11,13 @@ const Rid = @import("rid.zig").Rid;
 pub fn Btree(
     comptime Key: type,
     comptime cmp: fn (lsh: Key, rhs: Key) i32,
-    comptime leafMaxSize: ?usize,
-    comptime internalMaxSize: ?usize,
-    comptime numTombs: usize,
+    comptime maxLeafSize: ?usize,
+    comptime maxInternalSize: ?usize,
+    comptime tombCount: ?usize,
 ) type {
-    const InternalPage = InternalPage_(Key, internalMaxSize);
-    _ = InternalPage;
-    const LeafPage = LeafPage_(Key, cmp, leafMaxSize, numTombs);
+    const BasePage = BasePage_(Key, cmp);
+    const InternalPage = InternalPage_(Key, cmp, maxInternalSize);
+    const LeafPage = LeafPage_(Key, cmp, maxLeafSize, tombCount);
 
     return struct {
         const Self = @This();
@@ -41,12 +42,13 @@ pub fn Btree(
         pub fn insert(self: *Self, key: Key, rid: Rid) !void {
             var leaf: *LeafPage = undefined;
             var page: WritePage = undefined;
+            defer page.drop() catch {};
 
             if (self.rootPageId == null) {
                 // Tree is empty. Create a new leaf page.
                 self.rootPageId = self.bpm.newPage();
-                if (try self.bpm.getWritePage(self.rootPageId.?)) |p| {
-                    page = p;
+                if (try self.bpm.getWritePage(self.rootPageId.?)) |wp| {
+                    page = wp;
                     leaf = @ptrCast(@alignCast(page.getDataMut().ptr));
                     leaf.* = .{}; // reset
                 } else {
@@ -54,15 +56,66 @@ pub fn Btree(
                 }
             } else {
                 // Find the leaf node that should contain key K.
+                var searchPageId = self.rootPageId.?;
+                while (true) {
+                    const wp = (try self.bpm.getWritePage(searchPageId)).?;
+                    const bp: *const BasePage = @ptrCast(@alignCast(wp.getData().ptr));
+
+                    switch (bp.pageType) {
+                        .leaf => {
+                            page = wp;
+                            leaf = @ptrCast(@alignCast(page.getDataMut().ptr));
+                            break;
+                        },
+                        .internal => {
+                            const ip: *const InternalPage = @ptrCast(@alignCast(wp.getData().ptr));
+                            searchPageId = ip.vals[bp.findLastLe(&ip.keys, key) + 1];
+                        },
+                    }
+                }
             }
 
-            if (!leaf.isFull()) {
-                leaf.insert(leaf, key, rid);
+            if (!leaf.base.isFull()) {
+                leaf.insert(key, rid);
             } else {
                 // Split the leaf.
+                const newPageId = self.bpm.newPage();
+                if (try self.bpm.getWritePage(newPageId)) |wp| {
+                    var newPage = wp;
+                    defer newPage.drop() catch {};
+                    var newLeaf: *LeafPage = @ptrCast(@alignCast(newPage.getDataMut().ptr));
+                    newLeaf.* = .{};
+                    var tmpLeaf: LeafPage = leaf.clone();
+                    // Insert into the temp leaf.
+                    tmpLeaf.insert(key, rid);
+                    // Wire new leaf into list.
+                    newLeaf.nextPageId = leaf.nextPageId;
+                    leaf.nextPageId = newPageId;
+                    // Copy keys and values.
+                    leaf.fillFrom(tmpLeaf, 0, tmpLeaf.base.size / 2);
+                    newLeaf.fillFrom(tmpLeaf, tmpLeaf.base.size / 2, tmpLeaf.base.size);
+                    // Insert in parent.
+                    try self.insertInParent(page.readPage.getPageId(), newLeaf.keys[0], newPageId);
+                }
             }
+        }
 
-            try page.drop();
+        fn insertInParent(self: *Self, pageId: PageId, key: Key, newPageId: PageId) !void {
+            if (pageId == self.rootPageId) {
+                const newRootPageId = self.bpm.newPage();
+                if (try self.bpm.getWritePage(newRootPageId)) |wp| {
+                    var p = wp;
+                    defer p.drop() catch {};
+                    var ip: *InternalPage = @ptrCast(@alignCast(p.getDataMut().ptr));
+                    ip.* = .{};
+                    ip.base.size = 2;
+                    ip.keys[1] = key;
+                    ip.vals[0] = pageId;
+                    ip.vals[1] = newPageId;
+                    self.rootPageId = newRootPageId;
+                    return;
+                }
+            }
         }
     };
 }

@@ -1,5 +1,6 @@
 const LeafPage = @import("btree_page.zig").LeafPage;
 const Rid = @import("rid.zig").Rid;
+const gpa = @import("std").testing.allocator;
 const expectEqual = @import("std").testing.expectEqual;
 
 fn intCmp(lhs: i64, rhs: i64) i32 {
@@ -8,15 +9,15 @@ fn intCmp(lhs: i64, rhs: i64) i32 {
     return 0;
 }
 
-const Leaf = LeafPage(i64, intCmp, 10, 0);
+const Leaf = LeafPage(i64, intCmp, 10, null);
 
 test "LeafPage.insert" {
-    var leaf = Leaf{};
+    var leaf: Leaf = .{};
     leaf.insert(1, rid(0));
     leaf.insert(4, rid(1));
     leaf.insert(4, rid(2));
-    try expectEqual(1, leaf.keys[0]);
-    try expectEqual(4, leaf.keys[1]);
+    try expectKvAt(&leaf, 0, 1, rid(0));
+    try expectKvAt(&leaf, 1, 4, rid(1));
     try expectKvAt(&leaf, 2, 4, rid(2));
 
     leaf.insert(2, rid(3));
