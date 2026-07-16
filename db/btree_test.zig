@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const expectEqual = std.testing.expectEqual;
+const gpa = std.testing.allocator;
 
 const PageId = @import("page.zig").PageId;
 const Btree = @import("btree.zig").Btree;
@@ -29,8 +30,6 @@ const Leaf = LeafPage(i64, intCmp, 2, 0);
 const Internal = InternalPage(i64, intCmp, 3);
 
 test "bustub::BasicInsertTest" {
-    const gpa = testing.allocator;
-
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -65,8 +64,6 @@ test "bustub::BasicInsertTest" {
 }
 
 test "first split" {
-    const gpa = testing.allocator;
-
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -87,24 +84,117 @@ test "first split" {
     // Expects.
     // Assuming 3 pages.
     // root
+    try expectEqual(3, tree.rootPageId);
     try expectInternal(bpm, 3, .{
-        .base = .{ .pageType = .internal, .maxSize = 3, .size = 2 },
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 3,
+            .parentPageId = null,
+        },
         .keys = .{ undefined, 1, undefined },
         .vals = .{ 1, 2, undefined },
     });
 
     // leaf 1
     try expectLeaf(bpm, 1, .{
-        .base = .{ .pageType = .leaf, .maxSize = 2, .size = 1 },
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 1,
+            .parentPageId = 3,
+        },
         .keys = .{ 0, undefined, undefined },
         .vals = .{ rid(0), undefined, undefined },
         .nextPageId = 2,
     });
     // leaf 2
     try expectLeaf(bpm, 2, .{
-        .base = .{ .pageType = .leaf, .maxSize = 2, .size = 2 },
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 2,
+            .parentPageId = 3,
+        },
         .keys = .{ 1, 2, undefined },
         .vals = .{ rid(1), rid(2), undefined },
+        .nextPageId = null,
+    });
+}
+
+test "insert into existing parent" {
+    const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
+    defer gpa.free(cwd);
+    const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
+    defer gpa.free(dbPath);
+    var dm = try DiskManager.init(gpa, std.Options.debug_io, dbPath);
+    defer dm.deinit();
+    const bpm = try BufferPoolManager.init(gpa, std.Options.debug_io, 50, &dm);
+    defer bpm.deinit();
+    defer std.Io.Dir.deleteFile(std.Io.Dir.cwd(), std.Options.debug_io, dbPath) catch {};
+
+    const headerPageId = bpm.newPage();
+    var tree = Tree.init(gpa, "foo_pk", headerPageId, bpm);
+
+    try tree.insert(0, rid(0));
+    try tree.insert(1, rid(1));
+    try tree.insert(2, rid(2));
+    try tree.insert(3, rid(3));
+
+    // Root should still be page 3.
+    try expectEqual(@as(?PageId, 3), tree.rootPageId);
+
+    try expectInternal(bpm, 3, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 3,
+            .pageId = 3,
+            .parentPageId = null,
+        },
+        .keys = .{ undefined, 1, 2 },
+        .vals = .{ 1, 2, 4 },
+    });
+
+    try expectLeaf(bpm, 1, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 1,
+            .parentPageId = 3,
+        },
+        .keys = .{ 0, undefined, undefined },
+        .vals = .{ rid(0), undefined, undefined },
+        .nextPageId = 2,
+    });
+
+    try expectLeaf(bpm, 2, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 2,
+            .parentPageId = 3,
+        },
+        .keys = .{ 1, undefined, undefined },
+        .vals = .{ rid(1), undefined, undefined },
+        .nextPageId = 4,
+    });
+
+    try expectLeaf(bpm, 4, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 4,
+            .parentPageId = 3,
+        },
+        .keys = .{ 2, 3, undefined },
+        .vals = .{ rid(2), rid(3), undefined },
         .nextPageId = null,
     });
 }
@@ -130,7 +220,6 @@ fn expectLeaf(
         try expectEqual(expected.vals[i], leaf.vals[i]);
     }
     try expectEqual(expected.nextPageId, leaf.nextPageId);
-    try expectEqual(expected.parentPageId, leaf.parentPageId);
 }
 
 fn expectInternal(
@@ -150,5 +239,4 @@ fn expectInternal(
         try expectEqual(expected.keys[i], internal.keys[i]);
         try expectEqual(expected.vals[i], internal.vals[i]);
     }
-    try expectEqual(expected.parentPageId, internal.parentPageId);
 }

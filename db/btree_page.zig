@@ -16,6 +16,8 @@ pub fn BasePage(
         pageType: PageType,
         maxSize: usize,
         size: usize = 0,
+        pageId: PageId = undefined,
+        parentPageId: ?PageId = null,
 
         pub fn init(pageType: PageType, maxSize: usize) Self {
             return .{ .pageType = pageType, .maxSize = maxSize };
@@ -76,7 +78,27 @@ pub fn InternalPage(
         base: BasePage(Key, cmp) = .init(.internal, slotCount),
         keys: [slotCount]Key = undefined,
         vals: [slotCount]PageId = undefined,
-        parentPageId: ?PageId = null,
+
+        pub fn valueAt(self: *const Self, val: PageId) usize {
+            for (0..self.base.size) |i| {
+                if (self.vals[i] == val) return i;
+            }
+            unreachable;
+        }
+
+        pub fn insertAt(self: *Self, i: usize, key: Key, val: PageId) void {
+            if (!self.base.isEmpty()) {
+                var j = self.base.size - 1;
+                while (j >= i) : (j -= 1) {
+                    self.keys[j + 1] = self.keys[j];
+                    self.vals[j + 1] = self.vals[j];
+                    if (j == 0) break;
+                }
+            }
+            self.keys[i] = key;
+            self.vals[i] = val;
+            self.base.size += 1;
+        }
     };
 }
 
@@ -99,7 +121,6 @@ pub fn LeafPage(
         keys: [slotCount + 1]Key = undefined,
         vals: [slotCount + 1]Rid = undefined,
         nextPageId: ?PageId = null,
-        parentPageId: ?PageId = null,
 
         pub fn insert(self: *Self, key: Key, rid: Rid) void {
             if (self.base.isEmpty() or BasePage_.keyLt(key, self.keys[0])) {
@@ -126,7 +147,6 @@ pub fn LeafPage(
             }
             self.keys[i] = key;
             self.vals[i] = rid;
-
             self.base.size += 1;
         }
 
