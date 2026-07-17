@@ -122,7 +122,7 @@ test "split leaf" {
     });
 }
 
-test "parent" {
+test "split parent" {
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -191,7 +191,92 @@ test "parent" {
         .nextPageId = null,
     });
 
-    //
+    // recursively splitting parents
+    try tree.insert(4, rid(4));
+    try expectEqual(@as(?PageId, 7), tree.rootPageId);
+    // expect from bottom
+    // leaf page 1
+    try expectLeaf(bpm, 1, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 1,
+        },
+        .keys = .{ 0, undefined, undefined },
+        .vals = .{ rid(0), undefined, undefined },
+        .nextPageId = 2,
+    });
+    // leaf page 2
+    try expectLeaf(bpm, 2, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 2,
+        },
+        .keys = .{ 1, undefined, undefined },
+        .vals = .{ rid(1), undefined, undefined },
+        .nextPageId = 4,
+    });
+    // leaf page 4
+    try expectLeaf(bpm, 4, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 1,
+            .pageId = 4,
+        },
+        .keys = .{ 2, undefined, undefined },
+        .vals = .{ rid(2), undefined, undefined },
+        .nextPageId = 5,
+    });
+    // leaf page 5
+    try expectLeaf(bpm, 5, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 5,
+        },
+        .keys = .{ 3, 4, undefined },
+        .vals = .{ rid(3), rid(4), undefined },
+        .nextPageId = null,
+    });
+
+    // internal page 3
+    try expectInternal(bpm, 3, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 3,
+        },
+        .keys = .{ undefined, 1, undefined, undefined },
+        .vals = .{ 1, 2, undefined, undefined },
+    });
+    // internal page 6
+    try expectInternal(bpm, 6, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 6,
+        },
+        .keys = .{ undefined, 3, undefined, undefined },
+        .vals = .{ 4, 5, undefined, undefined },
+    });
+    // root
+    try expectInternal(bpm, 7, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 7,
+        },
+        .keys = .{ undefined, 3, undefined, undefined },
+        .vals = .{ 3, 6, undefined, undefined },
+    });
 }
 
 fn rid(i: u32) Rid {
