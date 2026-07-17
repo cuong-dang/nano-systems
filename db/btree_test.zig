@@ -91,7 +91,6 @@ test "split leaf" {
             .maxSize = 3,
             .size = 2,
             .pageId = 3,
-            .parentPageId = null,
         },
         .keys = .{ undefined, 1, undefined, undefined },
         .vals = .{ 1, 2, undefined, undefined },
@@ -104,7 +103,6 @@ test "split leaf" {
             .maxSize = 2,
             .size = 1,
             .pageId = 1,
-            .parentPageId = 3,
         },
         .keys = .{ 0, undefined, undefined },
         .vals = .{ rid(0), undefined, undefined },
@@ -117,7 +115,6 @@ test "split leaf" {
             .maxSize = 2,
             .size = 2,
             .pageId = 2,
-            .parentPageId = 3,
         },
         .keys = .{ 1, 2, undefined },
         .vals = .{ rid(1), rid(2), undefined },
@@ -125,7 +122,7 @@ test "split leaf" {
     });
 }
 
-test "split parent" {
+test "parent" {
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -153,7 +150,6 @@ test "split parent" {
             .maxSize = 3,
             .size = 3,
             .pageId = 3,
-            .parentPageId = null,
         },
         .keys = .{ undefined, 1, 2, undefined },
         .vals = .{ 1, 2, 4, undefined },
@@ -165,7 +161,6 @@ test "split parent" {
             .maxSize = 2,
             .size = 1,
             .pageId = 1,
-            .parentPageId = 3,
         },
         .keys = .{ 0, undefined, undefined },
         .vals = .{ rid(0), undefined, undefined },
@@ -178,7 +173,6 @@ test "split parent" {
             .maxSize = 2,
             .size = 1,
             .pageId = 2,
-            .parentPageId = 3,
         },
         .keys = .{ 1, undefined, undefined },
         .vals = .{ rid(1), undefined, undefined },
@@ -191,7 +185,6 @@ test "split parent" {
             .maxSize = 2,
             .size = 2,
             .pageId = 4,
-            .parentPageId = 3,
         },
         .keys = .{ 2, 3, undefined },
         .vals = .{ rid(2), rid(3), undefined },

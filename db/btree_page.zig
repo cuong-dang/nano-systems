@@ -17,7 +17,6 @@ pub fn BasePage(
         maxSize: usize,
         size: usize = 0,
         pageId: PageId,
-        parentPageId: ?PageId = null,
 
         pub fn init(pageType: PageType, maxSize: usize, pageId: PageId) Self {
             return .{ .pageType = pageType, .maxSize = maxSize, .pageId = pageId };
@@ -31,7 +30,8 @@ pub fn BasePage(
             return self.size >= self.maxSize;
         }
 
-        pub fn findLastLe(self: *const Self, keys: [*]const Key, key: Key, from: usize) usize {
+        pub fn indexOf(self: *const Self, keys: [*]const Key, key: Key) usize {
+            const from: usize = if (self.pageType == .internal) 1 else 0;
             std.debug.assert(!self.isEmpty());
             std.debug.assert(!Self.keyLt(key, keys[from]));
             var lo: usize = from;
@@ -88,11 +88,11 @@ pub fn InternalPage(
             return self.*;
         }
 
-        pub fn valueAt(self: *const Self, val: PageId) usize {
+        pub fn findVal(self: *const Self, val: PageId) ?usize {
             for (0..self.base.size) |i| {
                 if (self.vals[i] == val) return i;
             }
-            unreachable;
+            return null;
         }
 
         pub fn insertAt(self: *Self, i: usize, key: Key, val: PageId) void {
@@ -152,7 +152,7 @@ pub fn LeafPage(
                 return;
             }
             // Else, insert right after highest i such that K_i <= K.
-            self.insertAt(self.base.findLastLe(&self.keys, key, 0) + 1, key, rid);
+            self.insertAt(self.base.indexOf(&self.keys, key) + 1, key, rid);
         }
 
         pub fn clone(self: *const Self) Self {
