@@ -63,7 +63,7 @@ test "bustub::BasicInsertTest" {
     try rootGuard.drop();
 }
 
-test "first split" {
+test "split leaf" {
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -93,8 +93,8 @@ test "first split" {
             .pageId = 3,
             .parentPageId = null,
         },
-        .keys = .{ undefined, 1, undefined },
-        .vals = .{ 1, 2, undefined },
+        .keys = .{ undefined, 1, undefined, undefined },
+        .vals = .{ 1, 2, undefined, undefined },
     });
 
     // leaf 1
@@ -125,7 +125,7 @@ test "first split" {
     });
 }
 
-test "insert into existing parent" {
+test "split parent" {
     const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
     defer gpa.free(cwd);
     const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
@@ -155,8 +155,8 @@ test "insert into existing parent" {
             .pageId = 3,
             .parentPageId = null,
         },
-        .keys = .{ undefined, 1, 2 },
-        .vals = .{ 1, 2, 4 },
+        .keys = .{ undefined, 1, 2, undefined },
+        .vals = .{ 1, 2, 4, undefined },
     });
 
     try expectLeaf(bpm, 1, .{
@@ -197,6 +197,8 @@ test "insert into existing parent" {
         .vals = .{ rid(2), rid(3), undefined },
         .nextPageId = null,
     });
+
+    //
 }
 
 fn rid(i: u32) Rid {

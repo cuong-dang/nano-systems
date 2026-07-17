@@ -16,11 +16,11 @@ pub fn BasePage(
         pageType: PageType,
         maxSize: usize,
         size: usize = 0,
-        pageId: PageId = undefined,
+        pageId: PageId,
         parentPageId: ?PageId = null,
 
-        pub fn init(pageType: PageType, maxSize: usize) Self {
-            return .{ .pageType = pageType, .maxSize = maxSize };
+        pub fn init(pageType: PageType, maxSize: usize, pageId: PageId) Self {
+            return .{ .pageType = pageType, .maxSize = maxSize, .pageId = pageId };
         }
 
         pub fn isEmpty(self: *const Self) bool {
@@ -31,10 +31,10 @@ pub fn BasePage(
             return self.size >= self.maxSize;
         }
 
-        pub fn findLastLe(self: *const Self, keys: [*]const Key, key: Key) usize {
+        pub fn findLastLe(self: *const Self, keys: [*]const Key, key: Key, from: usize) usize {
             std.debug.assert(!self.isEmpty());
-            std.debug.assert(!Self.keyLt(key, keys[0]));
-            var lo: usize = 0;
+            std.debug.assert(!Self.keyLt(key, keys[from]));
+            var lo: usize = from;
             var hi = self.size - 1;
             while (lo <= hi) {
                 var mid = (lo + hi) / 2;
@@ -75,9 +75,18 @@ pub fn InternalPage(
         const Self = @This();
         const slotCount = if (maxSize != null) maxSize.? else (pageSize - internalPageHeaderSize) / (@sizeOf(Key) + @sizeOf(PageId));
 
-        base: BasePage(Key, cmp) = .init(.internal, slotCount),
-        keys: [slotCount]Key = undefined,
-        vals: [slotCount]PageId = undefined,
+        base: BasePage(Key, cmp),
+        // One additional slot for splitting.
+        keys: [slotCount + 1]Key = undefined,
+        vals: [slotCount + 1]PageId = undefined,
+
+        pub fn init(pageId: PageId) Self {
+            return .{ .base = .init(.internal, slotCount, pageId) };
+        }
+
+        pub fn clone(self: *const Self) Self {
+            return self.*;
+        }
 
         pub fn valueAt(self: *const Self, val: PageId) usize {
             for (0..self.base.size) |i| {
@@ -99,6 +108,16 @@ pub fn InternalPage(
             self.vals[i] = val;
             self.base.size += 1;
         }
+
+        pub fn fillFrom(self: *Self, src: Self, srcFrom: usize, srcTo: usize) void {
+            self.base.size = srcTo - srcFrom;
+            for (0..self.base.size) |i| {
+                if (i < self.base.size - 1) {
+                    self.keys[i + 1] = src.keys[srcFrom + i + 1];
+                }
+                self.vals[i] = src.vals[srcFrom + i];
+            }
+        }
     };
 }
 
@@ -116,11 +135,15 @@ pub fn LeafPage(
         const slotCount = if (maxSize != null) maxSize.? else (pageSize - leafPageHeaderSize - @sizeOf(usize) - (tc * @sizeOf(usize))) / (@sizeOf(Key) + @sizeOf(Rid));
         const BasePage_ = BasePage(Key, cmp);
 
-        base: BasePage_ = .init(.leaf, slotCount),
+        base: BasePage_,
         // One additional slot for splitting.
         keys: [slotCount + 1]Key = undefined,
         vals: [slotCount + 1]Rid = undefined,
         nextPageId: ?PageId = null,
+
+        pub fn init(pageId: PageId) Self {
+            return .{ .base = .init(.leaf, slotCount, pageId) };
+        }
 
         pub fn insert(self: *Self, key: Key, rid: Rid) void {
             if (self.base.isEmpty() or BasePage_.keyLt(key, self.keys[0])) {
@@ -129,7 +152,7 @@ pub fn LeafPage(
                 return;
             }
             // Else, insert right after highest i such that K_i <= K.
-            self.insertAt(self.base.findLastLe(&self.keys, key) + 1, key, rid);
+            self.insertAt(self.base.findLastLe(&self.keys, key, 0) + 1, key, rid);
         }
 
         pub fn clone(self: *const Self) Self {
