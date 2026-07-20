@@ -60,7 +60,7 @@ test "bustub::BasicInsertTest" {
     try expectEqual(0, leaf.keys[0]);
     try expectEqual(rid(0), leaf.vals[0]);
 
-    try rootGuard.drop();
+    rootGuard.drop();
 }
 
 test "split leaf" {
@@ -289,7 +289,7 @@ fn expectLeaf(
     expected: Leaf,
 ) !void {
     var leafPage = (try bpm.getReadPage(pageId)).?;
-    defer leafPage.drop() catch {};
+    defer leafPage.drop();
     const base: *const Base = @ptrCast(@alignCast(leafPage.getData().ptr));
     try expectEqual(PageType.leaf, base.pageType);
 
@@ -308,7 +308,7 @@ fn expectInternal(
     expected: Internal,
 ) !void {
     var ip = (try bpm.getReadPage(pageId)).?;
-    defer ip.drop() catch {};
+    defer ip.drop();
     const base: *const Base = @ptrCast(@alignCast(ip.getData().ptr));
     try expectEqual(PageType.internal, base.pageType);
 

@@ -88,11 +88,11 @@ pub const ArcReplacer = struct {
         try self.mru.prepend(frameId, &frame.node);
     }
 
-    pub fn setEvictable(self: *ArcReplacer, frameId: usize, evictable: bool) !void {
+    pub fn setEvictable(self: *ArcReplacer, frameId: usize, evictable: bool) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
-        const node = self.mru.get(frameId) orelse self.mfu.get(frameId) orelse return Error.FrameNotFound;
+        const node = self.mru.get(frameId) orelse self.mfu.get(frameId) orelse return;
         var frame: *Frame = @fieldParentPtr("node", node);
         if (!frame.evictable and evictable) self.numEvictable += 1 else if (frame.evictable and !evictable) self.numEvictable -= 1;
         frame.evictable = evictable;
@@ -262,5 +262,3 @@ const Frame = struct {
         // pageId stays the same.
     }
 };
-
-const Error = error{FrameNotFound};

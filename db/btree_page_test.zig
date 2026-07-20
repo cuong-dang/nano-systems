@@ -12,7 +12,7 @@ fn intCmp(lhs: i64, rhs: i64) i32 {
 const Leaf = LeafPage(i64, intCmp, 10, null);
 
 test "LeafPage.insert" {
-    var leaf: Leaf = .{};
+    var leaf: Leaf = .init(0);
     leaf.insert(1, rid(0));
     leaf.insert(4, rid(1));
     leaf.insert(4, rid(2));

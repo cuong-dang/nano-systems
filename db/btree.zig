@@ -42,7 +42,7 @@ pub fn Btree(
         pub fn insert(self: *Self, key: Key, rid: Rid) !void {
             var leaf: *LeafPage = undefined;
             var page: WritePage = undefined;
-            defer page.drop() catch {};
+            defer page.drop();
 
             if (self.rootPageId == null) {
                 // Tree is empty. Create a new leaf page.
@@ -70,7 +70,7 @@ pub fn Btree(
                         .internal => {
                             const ip: *const InternalPage = @ptrCast(@alignCast(wp.getData().ptr));
                             searchPageId = ip.vals[p.indexOf(&ip.keys, key)];
-                            try wp.drop();
+                            wp.drop();
                         },
                     }
                 }
@@ -82,7 +82,7 @@ pub fn Btree(
                 // Split the leaf.
                 const newPageId = self.bpm.newPage();
                 var p = (try self.bpm.getWritePage(newPageId)).?;
-                defer p.drop() catch {};
+                defer p.drop();
                 var newLeaf: *LeafPage = @ptrCast(@alignCast(p.getDataMut().ptr));
                 newLeaf.* = .init(newPageId);
                 var tmpLeaf: LeafPage = leaf.clone();
@@ -104,7 +104,7 @@ pub fn Btree(
             if (base1.pageId == self.rootPageId) {
                 const newRootPageId = self.bpm.newPage();
                 var p = (try self.bpm.getWritePage(newRootPageId)).?;
-                defer p.drop() catch {};
+                defer p.drop();
                 var ip: *InternalPage = @ptrCast(@alignCast(p.getDataMut().ptr));
                 ip.* = .init(newRootPageId);
                 ip.base.size = 2;
@@ -116,7 +116,7 @@ pub fn Btree(
             }
             // Else, get the parent.
             var p = (try self.bpm.getWritePage(try self.parentPageIdOf(base1, key))).?;
-            defer p.drop() catch {};
+            defer p.drop();
             var parent: *InternalPage = @ptrCast(@alignCast(p.getDataMut().ptr));
             if (!parent.base.isFull()) {
                 parent.insertAt(
@@ -129,7 +129,7 @@ pub fn Btree(
             // Split the parent.
             const newPageId = self.bpm.newPage();
             var p2 = (try self.bpm.getWritePage(newPageId)).?;
-            defer p2.drop() catch {};
+            defer p2.drop();
             var newParent: *InternalPage = @ptrCast(@alignCast(p2.getDataMut().ptr));
             newParent.* = .init(newPageId);
             var tmpParent: InternalPage = parent.clone();
@@ -146,11 +146,11 @@ pub fn Btree(
                 var rp = (try self.bpm.getReadPage(result)).?;
                 const p: *const InternalPage = @ptrCast(@alignCast(rp.getData().ptr));
                 if (p.findVal(base.pageId) != null) {
-                    try rp.drop();
+                    rp.drop();
                     return result;
                 }
                 result = p.vals[p.base.indexOf(&p.keys, key)];
-                try rp.drop();
+                rp.drop();
             }
         }
     };

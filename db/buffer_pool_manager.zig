@@ -113,7 +113,7 @@ pub const BufferPoolManager = struct {
 
         try self.pageTable.put(pageId, frame);
         try self.arc.recordAccess(frame.id, pageId);
-        try self.arc.setEvictable(frame.id, false);
+        self.arc.setEvictable(frame.id, false);
 
         // Page in data if exists on disk.
         if (pagingIn and self.dm.exists(pageId)) {
@@ -129,13 +129,13 @@ pub const BufferPoolManager = struct {
         return frame;
     }
 
-    fn drop(self: *BufferPoolManager, frame: *Frame) !void {
+    fn drop(self: *BufferPoolManager, frame: *Frame) void {
         self.mu.lockUncancelable(self.io);
         defer self.mu.unlock(self.io);
 
         frame.unpin();
         if (frame.pinCount == 0) {
-            try self.arc.setEvictable(frame.id, true);
+            self.arc.setEvictable(frame.id, true);
         }
     }
 
@@ -194,8 +194,8 @@ const Frame = struct {
         self.isDirty = false;
     }
 
-    pub fn drop(self: *Frame) !void {
-        try self.bpm.drop(self);
+    pub fn drop(self: *Frame) void {
+        self.bpm.drop(self);
     }
 };
 
@@ -223,9 +223,9 @@ pub const WritePage = struct {
         try self.readPage.flush();
     }
 
-    pub fn drop(self: *WritePage) !void {
+    pub fn drop(self: *WritePage) void {
         if (self.readPage.dropped) return;
-        try self.readPage.frame.drop();
+        self.readPage.frame.drop();
         self.readPage.dropped = true;
         self.readPage.frame.pageLock.unlock(self.readPage.frame.bpm.io);
     }
@@ -251,9 +251,9 @@ pub const ReadPage = struct {
         try self.frame.flush();
     }
 
-    pub fn drop(self: *ReadPage) !void {
+    pub fn drop(self: *ReadPage) void {
         if (self.dropped) return;
-        try self.frame.drop();
+        self.frame.drop();
         self.dropped = true;
         self.frame.pageLock.unlockShared(self.frame.bpm.io);
     }
