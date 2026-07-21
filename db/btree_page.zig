@@ -33,7 +33,7 @@ pub fn BasePage(
         pub fn indexOf(self: *const Self, keys: [*]const Key, key: Key) usize {
             const from: usize = if (self.pageType == .internal) 1 else 0;
             std.debug.assert(!self.isEmpty());
-            std.debug.assert(!Self.keyLt(key, keys[from]));
+
             var lo: usize = from;
             var hi = self.size - 1;
             while (lo <= hi) {
@@ -80,12 +80,23 @@ pub fn InternalPage(
         keys: [slotCount + 1]Key = undefined,
         vals: [slotCount + 1]PageId = undefined,
 
-        pub fn init(pageId: PageId) Self {
-            return .{ .base = .init(.internal, slotCount, pageId) };
+        pub fn init(pageId: PageId, pageId1: PageId, key: Key, pageId2: PageId) Self {
+            var new: Self = .{ .base = .init(.internal, slotCount, pageId) };
+            new.keys[1] = key;
+            new.vals[0] = pageId1;
+            new.vals[1] = pageId2;
+            new.base.size = 2;
+            return new;
         }
 
         pub fn clone(self: *const Self) Self {
             return self.*;
+        }
+
+        pub fn pageIdOf(self: *const Self, key: Key) PageId {
+            // Internal page should never be empty.
+            std.debug.assert(self.base.size != 0);
+            return self.vals[self.base.indexOf(&self.keys, key)];
         }
 
         pub fn findVal(self: *const Self, val: PageId) ?usize {
@@ -96,6 +107,7 @@ pub fn InternalPage(
         }
 
         pub fn insertAt(self: *Self, i: usize, key: Key, val: PageId) void {
+            std.debug.assert(i >= 1);
             if (!self.base.isEmpty()) {
                 var j = self.base.size - 1;
                 while (j >= i) : (j -= 1) {
@@ -110,6 +122,7 @@ pub fn InternalPage(
         }
 
         pub fn fillFrom(self: *Self, src: Self, srcFrom: usize, srcTo: usize) void {
+            // Fill values from 0..N; this means that we fill keys from 1..N-1;
             self.base.size = srcTo - srcFrom;
             for (0..self.base.size) |i| {
                 if (i < self.base.size - 1) {

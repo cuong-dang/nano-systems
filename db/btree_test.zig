@@ -143,7 +143,7 @@ test "split parent" {
 
     // Root should still be page 3.
     try expectEqual(@as(?PageId, 3), tree.rootPageId);
-
+    // root 3
     try expectInternal(bpm, 3, .{
         .base = .{
             .pageType = .internal,
@@ -154,7 +154,7 @@ test "split parent" {
         .keys = .{ undefined, 1, 2, undefined },
         .vals = .{ 1, 2, 4, undefined },
     });
-
+    // leaf 1
     try expectLeaf(bpm, 1, .{
         .base = .{
             .pageType = .leaf,
@@ -166,7 +166,7 @@ test "split parent" {
         .vals = .{ rid(0), undefined, undefined },
         .nextPageId = 2,
     });
-
+    // leaf 2
     try expectLeaf(bpm, 2, .{
         .base = .{
             .pageType = .leaf,
@@ -178,7 +178,7 @@ test "split parent" {
         .vals = .{ rid(1), undefined, undefined },
         .nextPageId = 4,
     });
-
+    // leaf 4
     try expectLeaf(bpm, 4, .{
         .base = .{
             .pageType = .leaf,
@@ -274,7 +274,115 @@ test "split parent" {
             .size = 2,
             .pageId = 7,
         },
-        .keys = .{ undefined, 3, undefined, undefined },
+        .keys = .{ undefined, 2, undefined, undefined },
+        .vals = .{ 3, 6, undefined, undefined },
+    });
+}
+
+test "insert descending order" {
+    const cwd = try std.process.currentPathAlloc(std.Options.debug_io, gpa);
+    defer gpa.free(cwd);
+    const dbPath = try std.fs.path.resolve(gpa, &.{ cwd, "./test.db" });
+    defer gpa.free(dbPath);
+    var dm = try DiskManager.init(gpa, std.Options.debug_io, dbPath);
+    defer dm.deinit();
+    const bpm = try BufferPoolManager.init(gpa, std.Options.debug_io, 50, &dm);
+    defer bpm.deinit();
+    defer std.Io.Dir.deleteFile(std.Io.Dir.cwd(), std.Options.debug_io, dbPath) catch {};
+
+    const headerPageId = bpm.newPage();
+    var tree = Tree.init(gpa, "foo_pk", headerPageId, bpm);
+
+    try tree.insert(7, rid(7));
+    try tree.insert(6, rid(6));
+    try tree.insert(5, rid(5));
+    try tree.insert(4, rid(4));
+    try tree.insert(3, rid(3));
+    try tree.insert(2, rid(2));
+    try tree.insert(1, rid(1));
+    try tree.insert(0, rid(0));
+
+    try expectEqual(@as(?PageId, 7), tree.rootPageId);
+    // expect from bottom
+    // leaf 1
+    try expectLeaf(bpm, 1, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 1,
+        },
+        .keys = .{ 0, 1, undefined },
+        .vals = .{ rid(0), rid(1), undefined },
+        .nextPageId = 5,
+    });
+    // leaf 5
+    try expectLeaf(bpm, 5, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 5,
+        },
+        .keys = .{ 2, 3, undefined },
+        .vals = .{ rid(2), rid(3), undefined },
+        .nextPageId = 4,
+    });
+    // leaf 4
+    try expectLeaf(bpm, 4, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 4,
+        },
+        .keys = .{ 4, 5, undefined },
+        .vals = .{ rid(4), rid(5), undefined },
+        .nextPageId = 2,
+    });
+    // leaf 2
+    try expectLeaf(bpm, 2, .{
+        .base = .{
+            .pageType = .leaf,
+            .maxSize = 2,
+            .size = 2,
+            .pageId = 2,
+        },
+        .keys = .{ 6, 7, undefined },
+        .vals = .{ rid(6), rid(7), undefined },
+        .nextPageId = null,
+    });
+    // internal 3
+    try expectInternal(bpm, 3, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 3,
+        },
+        .keys = .{ undefined, 2, undefined, undefined },
+        .vals = .{ 1, 5, undefined, undefined },
+    });
+    // internal 6
+    try expectInternal(bpm, 6, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 6,
+        },
+        .keys = .{ undefined, 6, undefined, undefined },
+        .vals = .{ 4, 2, undefined, undefined },
+    });
+    // root 7
+    try expectInternal(bpm, 7, .{
+        .base = .{
+            .pageType = .internal,
+            .maxSize = 3,
+            .size = 2,
+            .pageId = 7,
+        },
+        .keys = .{ undefined, 4, undefined, undefined },
         .vals = .{ 3, 6, undefined, undefined },
     });
 }

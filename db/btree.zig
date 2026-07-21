@@ -2,9 +2,9 @@ const std = @import("std");
 
 const PageId = @import("page.zig").PageId;
 const WritePage = @import("buffer_pool_manager.zig").WritePage;
-const BasePage_ = @import("btree_page.zig").BasePage;
-const InternalPage_ = @import("btree_page.zig").InternalPage;
-const LeafPage_ = @import("btree_page.zig").LeafPage;
+const BasePage = @import("btree_page.zig").BasePage;
+const InternalPage = @import("btree_page.zig").InternalPage;
+const LeafPage = @import("btree_page.zig").LeafPage;
 const BufferPoolManager = @import("buffer_pool_manager.zig").BufferPoolManager;
 const Rid = @import("rid.zig").Rid;
 
@@ -15,9 +15,9 @@ pub fn Btree(
     comptime maxInternalSize: ?usize,
     comptime tombCount: ?usize,
 ) type {
-    const BasePage = BasePage_(Key, cmp);
-    const InternalPage = InternalPage_(Key, cmp, maxInternalSize);
-    const LeafPage = LeafPage_(Key, cmp, maxLeafSize, tombCount);
+    const Base = BasePage(Key, cmp);
+    const Internal = InternalPage(Key, cmp, maxInternalSize);
+    const Leaf = LeafPage(Key, cmp, maxLeafSize, tombCount);
 
     return struct {
         const Self = @This();
@@ -40,7 +40,7 @@ pub fn Btree(
         }
 
         pub fn insert(self: *Self, key: Key, rid: Rid) !void {
-            var leaf: *LeafPage = undefined;
+            var leaf: *Leaf = undefined;
             var page: WritePage = undefined;
             defer page.drop();
 
@@ -59,7 +59,7 @@ pub fn Btree(
                 var searchPageId = self.rootPageId.?;
                 while (true) {
                     var wp = (try self.bpm.getWritePage(searchPageId)).?;
-                    const p: *const BasePage = @ptrCast(@alignCast(wp.getData().ptr));
+                    const p: *const Base = @ptrCast(@alignCast(wp.getData().ptr));
 
                     switch (p.pageType) {
                         .leaf => {
@@ -68,8 +68,8 @@ pub fn Btree(
                             break;
                         },
                         .internal => {
-                            const ip: *const InternalPage = @ptrCast(@alignCast(wp.getData().ptr));
-                            searchPageId = ip.vals[p.indexOf(&ip.keys, key)];
+                            const ip: *const Internal = @ptrCast(@alignCast(wp.getData().ptr));
+                            searchPageId = ip.pageIdOf(key);
                             wp.drop();
                         },
                     }
@@ -83,9 +83,10 @@ pub fn Btree(
                 const newPageId = self.bpm.newPage();
                 var p = (try self.bpm.getWritePage(newPageId)).?;
                 defer p.drop();
-                var newLeaf: *LeafPage = @ptrCast(@alignCast(p.getDataMut().ptr));
+
+                var newLeaf: *Leaf = @ptrCast(@alignCast(p.getDataMut().ptr));
                 newLeaf.* = .init(newPageId);
-                var tmpLeaf: LeafPage = leaf.clone();
+                var tmpLeaf: Leaf = leaf.clone();
                 // Insert into the temp leaf.
                 tmpLeaf.insert(key, rid);
                 // Wire new leaf into list.
@@ -99,25 +100,21 @@ pub fn Btree(
             }
         }
 
-        fn insertInParent(self: *Self, base1: *BasePage, key: Key, base2: *BasePage) !void {
+        fn insertInParent(self: *Self, base1: *Base, key: Key, base2: *Base) !void {
             // Root page.
             if (base1.pageId == self.rootPageId) {
                 const newRootPageId = self.bpm.newPage();
                 var p = (try self.bpm.getWritePage(newRootPageId)).?;
                 defer p.drop();
-                var ip: *InternalPage = @ptrCast(@alignCast(p.getDataMut().ptr));
-                ip.* = .init(newRootPageId);
-                ip.base.size = 2;
-                ip.keys[1] = key;
-                ip.vals[0] = base1.pageId;
-                ip.vals[1] = base2.pageId;
+                const ip: *Internal = @ptrCast(@alignCast(p.getDataMut().ptr));
+                ip.* = .init(newRootPageId, base1.pageId, key, base2.pageId);
                 self.rootPageId = newRootPageId;
                 return;
             }
             // Else, get the parent.
             var p = (try self.bpm.getWritePage(try self.parentPageIdOf(base1, key))).?;
             defer p.drop();
-            var parent: *InternalPage = @ptrCast(@alignCast(p.getDataMut().ptr));
+            var parent: *Internal = @ptrCast(@alignCast(p.getDataMut().ptr));
             if (!parent.base.isFull()) {
                 parent.insertAt(
                     parent.findVal(base1.pageId).? + 1,
@@ -130,27 +127,25 @@ pub fn Btree(
             const newPageId = self.bpm.newPage();
             var p2 = (try self.bpm.getWritePage(newPageId)).?;
             defer p2.drop();
-            var newParent: *InternalPage = @ptrCast(@alignCast(p2.getDataMut().ptr));
-            newParent.* = .init(newPageId);
-            var tmpParent: InternalPage = parent.clone();
+            var newParent: *Internal = @ptrCast(@alignCast(p2.getDataMut().ptr));
+            newParent.* = .init(newPageId, undefined, undefined, undefined);
+            var tmpParent: Internal = parent.clone();
             tmpParent.insertAt(tmpParent.findVal(base1.pageId).? + 1, key, base2.pageId);
-            parent.fillFrom(tmpParent, 0, tmpParent.base.size / 2);
-            newParent.fillFrom(tmpParent, tmpParent.base.size / 2, tmpParent.base.size);
-            try self.insertInParent(&parent.base, newParent.keys[1], &newParent.base);
+            const splitAt = tmpParent.base.size / 2;
+            parent.fillFrom(tmpParent, 0, splitAt);
+            newParent.fillFrom(tmpParent, splitAt, tmpParent.base.size);
+            try self.insertInParent(&parent.base, tmpParent.keys[splitAt], &newParent.base);
         }
 
-        fn parentPageIdOf(self: *const Self, base: *const BasePage, key: Key) !PageId {
+        fn parentPageIdOf(self: *const Self, base: *const Base, key: Key) !PageId {
             // Searching from the root should not run into lock contention at this point.
             var result = self.rootPageId.?;
             while (true) {
                 var rp = (try self.bpm.getReadPage(result)).?;
-                const p: *const InternalPage = @ptrCast(@alignCast(rp.getData().ptr));
-                if (p.findVal(base.pageId) != null) {
-                    rp.drop();
-                    return result;
-                }
-                result = p.vals[p.base.indexOf(&p.keys, key)];
-                rp.drop();
+                defer rp.drop();
+                const p: *const Internal = @ptrCast(@alignCast(rp.getData().ptr));
+                if (p.findVal(base.pageId) != null) return result;
+                result = p.pageIdOf(key);
             }
         }
     };
