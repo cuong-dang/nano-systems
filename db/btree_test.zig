@@ -45,6 +45,8 @@ test "bustub::BasicInsertTest" {
     var tree = Tree.init(gpa, "foo_pk", headerPageId, bpm);
 
     try tree.insert(0, rid(0));
+    try expectEqual(rid(0), try tree.find(0));
+    try expectEqual(null, try tree.find(1));
 
     // Verify root exists
     try testing.expect(tree.rootPageId != null);
@@ -80,6 +82,9 @@ test "split leaf" {
     try tree.insert(0, rid(0));
     try tree.insert(1, rid(1));
     try tree.insert(2, rid(2));
+    try expectEqual(rid(0), try tree.find(0));
+    try expectEqual(rid(1), try tree.find(1));
+    try expectEqual(rid(2), try tree.find(2));
 
     // Expects.
     // Assuming 3 pages.
@@ -140,6 +145,10 @@ test "split parent" {
     try tree.insert(1, rid(1));
     try tree.insert(2, rid(2));
     try tree.insert(3, rid(3));
+    try expectEqual(rid(0), try tree.find(0));
+    try expectEqual(rid(1), try tree.find(1));
+    try expectEqual(rid(2), try tree.find(2));
+    try expectEqual(rid(3), try tree.find(3));
 
     // Root should still be page 3.
     try expectEqual(@as(?PageId, 3), tree.rootPageId);
@@ -193,6 +202,7 @@ test "split parent" {
 
     // recursively splitting parents
     try tree.insert(4, rid(4));
+    try expectEqual(rid(4), try tree.find(4));
     try expectEqual(@as(?PageId, 7), tree.rootPageId);
     // expect from bottom
     // leaf page 1
@@ -301,6 +311,14 @@ test "insert descending order" {
     try tree.insert(2, rid(2));
     try tree.insert(1, rid(1));
     try tree.insert(0, rid(0));
+    try expectEqual(rid(0), try tree.find(0));
+    try expectEqual(rid(1), try tree.find(1));
+    try expectEqual(rid(2), try tree.find(2));
+    try expectEqual(rid(3), try tree.find(3));
+    try expectEqual(rid(4), try tree.find(4));
+    try expectEqual(rid(5), try tree.find(5));
+    try expectEqual(rid(6), try tree.find(6));
+    try expectEqual(rid(7), try tree.find(7));
 
     try expectEqual(@as(?PageId, 7), tree.rootPageId);
     // expect from bottom

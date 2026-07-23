@@ -39,6 +39,31 @@ pub fn Btree(
             return .{ .gpa = gpa, .name = name, .headerPageId = headerPageId, .bpm = bpm };
         }
 
+        pub fn find(self: *const Self, key: Key) !?Rid {
+            if (self.rootPageId == null) return null;
+
+            var leaf: *const Leaf = undefined;
+            var searchPageId = self.rootPageId.?;
+            while (true) {
+                var p = (try self.bpm.getReadPage(searchPageId)).?;
+                const base: *const Base = @ptrCast(@alignCast(p.getData().ptr));
+
+                switch (base.pageType) {
+                    .leaf => {
+                        leaf = @ptrCast(@alignCast(p.getData().ptr));
+                        p.drop();
+                        break;
+                    },
+                    .internal => {
+                        const ip: *const Internal = @ptrCast(@alignCast(p.getData().ptr));
+                        searchPageId = ip.pageIdOf(key);
+                        p.drop();
+                    },
+                }
+            }
+            return leaf.find(key);
+        }
+
         pub fn insert(self: *Self, key: Key, rid: Rid) !void {
             var leaf: *Leaf = undefined;
             var page: WritePage = undefined;

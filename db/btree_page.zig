@@ -54,11 +54,11 @@ pub fn BasePage(
             return hi;
         }
 
-        fn keyLt(a: Key, b: Key) bool {
+        pub fn keyLt(a: Key, b: Key) bool {
             return cmp(a, b) < 0;
         }
 
-        fn keyEquals(a: Key, b: Key) bool {
+        pub fn keyEquals(a: Key, b: Key) bool {
             return cmp(a, b) == 0;
         }
     };
@@ -156,6 +156,12 @@ pub fn LeafPage(
 
         pub fn init(pageId: PageId) Self {
             return .{ .base = .init(.leaf, slotCount, pageId) };
+        }
+
+        pub fn find(self: *const Self, key: Key) ?Rid {
+            const i = self.base.indexOf(&self.keys, key);
+            if (BasePage_.keyEquals(key, self.keys[i])) return self.vals[i];
+            return null;
         }
 
         pub fn insert(self: *Self, key: Key, rid: Rid) void {
